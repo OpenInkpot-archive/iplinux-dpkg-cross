@@ -18,7 +18,7 @@
 #
 #  $Id: Makefile,v 1.15 2005/12/01 09:40:49 yoush-guest Exp $
 
-SCRIPTS = dpkg-cross dpkg-buildpackage dpkg-shlibdeps
+SCRIPTS = dpkg-cross dpkg-buildpackage dpkg-shlibdeps dpkg-checkbuilddeps
 SHARESCRIPTS = gccross strip objdump objcopy
 CONFFILES = $(shell ls -1 cross-config.*) crosstools
 MAN1 = dpkg-cross.1 gccross.1
