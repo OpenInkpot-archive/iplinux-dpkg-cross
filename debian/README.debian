@@ -1,0 +1,735 @@
+Note
+----
+
+This documentation is out of date and needs to be updated.
+For now, forward any questions to debian-embedded@lists.debian.org
+
+Nikita Youshchnko <yoush@cs.msu.su>
+
+							  dpkg-cross
+							  ==========
+
+dpkg-cross is a collection of utilities (or do you want to call them
+hacks? :-) to make cross compiling Debian packages easier. It consists
+of the following parts:
+
+ - dpkg-cross, to install libraries and header files for cross
+   compiling directly from .deb files
+
+ - A wrapper for dpkg-buildpackage, that sets some environment
+   variables to select compiler, linker, ... to use for building.
+
+ - A wrapper for dpkg-shlibdeps, to make it work on non-native
+   binaries.
+
+ - A tool dpkg-cross-convert that converts old-style (0.x)
+   library/header installations to the new 1.x scheme.
+
+ - A config file, /etc/dpkg-cross/cross-compile, for defining paths and
+   package-specific environment variables.
+
+ - Config files /etc/dpkg-cross/cross-config.*, for defining some autoconf
+   values (Linux-specific and architecture-specific)
+
+
+1) Prerequisites
+----------------
+
+For doing cross compiling, you obviously need a cross compiler :-)
+That one isn't supplied by dpkg-cross, you have to build it yourself.
+There are also usually no cross compilers as Debian packages, since
+there are numerous combinations of host and target architectures, and
+to handle all these in the gcc and binutils packages would be tedious.
+(However, since some time an i386->m68k cross compiler exists as a
+Debian package.)
+
+But I sounds more difficult as it is... I'll give you a brief outline
+in the following. To make the examples easier, I pick the m68k
+architecture as our target, but surely you can substitute any other
+target architecture!
+
+ - First (before gcc!) build cross-binutils. Get the current GNU
+   binutils sources, and configure them. Most binutils can be built
+   with support for many object file formats at once, which is at
+   least needed for strip. This is because 'install' simply calls
+   'strip', and if you're installing non-native binaries, 'install'
+   would print a warning (and not strip...) if your /usr/bin/strip can
+   handle only native binaries.
+
+   But also for most other binutils, it is convenient to have them
+   multi-architectural. Just type size, objdump, or whatever you like,
+   without caring about the architecture... But in two cases, this
+   luxury isn't possible: 'as' and 'ar' have to built singly for the
+   target architecture.
+
+   Ok, to summarize: First configure for multiple architectures:
+
+     ./configure ... --enable-targets="i386-linux m68k-linux"
+
+   and compile, and install the tools you want to have
+   multi-architectural (best manually). You might want to consider
+   dpkg-divert, to avoid the next binutils upgrade overwrite them...
+
+   Next, configure only for the target arch:
+
+     ./configure ... --target=m68k-linux
+
+   and compile at least as and ar. Install them in your cross
+   compiling bin directory, which is usually /usr/local/TARGET/bin.
+   Here, TARGET would be "m68k-linux". IMHO the cross compiling stuff
+   belongs into /usr/local, because it isn't part of the standard
+   Debian distribution, but your mileage may vary... Choose what you
+   like, but don't forget to tell dpkg-cross about your choice in
+   /etc/dpkg-cross/cross-compile.
+
+ - Ok, this done, you can go for gcc. This is rather easy:
+
+     ./configure ... --target=m68k-linux
+
+   and build it. 'make install' should be ok, the Makefile doesn't do
+   anything unwise, AFAIK.
+
+ - If you don't want to type whole paths all the time you call a tool
+   you haven't build multi-architectural, make symlinks like
+
+     m68k-linux-size -> ../m68k-linux/bin/size
+
+   in the bin directory of the hierarchy where all is installed. Then
+   you can call the stuff with the target prefix.
+
+ - That's it already :-) If I was too brief, there's also a HOWTO for
+   cross compiling at ftp.uni-erlangen.de:/pub/Linux/680x0/docs.
+
+
+2) dpkg-cross
+-------------
+
+dpkg-cross doesn't do any cross compiling itself, it addresses another
+problem (you'd encounter if you wouldn't have dpkg-cross :-). For
+cross compiling, you need also libraries and their accompanying
+headers for the target architecture. If you're cross compiling Debian
+packages, all you need is available as Debian packages, but you can't
+simply install those packages on your compile host. dpkg refuses to do
+so, because of architecture mismatch. Ok, you could install everything
+on a host with the "correct" architecture and copy it back, but that's
+a lot of work. Or you could use dpkg-deb --fsys-tarfile to get your
+hands on the files, but that also involves a lot of moving files
+around... dpkg-cross does that dirty jobs for you.
+
+A word to directory layout: The cross compiling library directory is
+simply only one. This means, you don't have separate dirs like /lib,
+/usr/lib, /usr/X11R6/lib, ... where to look for libraries. dpkg-cross
+calls this dir $(CROSSLIB), and it could be e.g.
+/usr/local/m68k-linux/lib. There's also only one include directory.
+
+Eeeh, wait, you say: Why do I need different headers for cross
+compiling at all? Aren't they the same as the headers for the native
+system, which I have installed already? Basically, you're right. But
+my experience tells me, that there *are* differences, where you don't
+expect them... I'd say, you're just more on the safe side if you have
+the real headers for your target architecture in use. Having a
+separate set of headers also allows you to install/remove native and
+cross compiling library packages completely independent.
+
+Ok, now really coming to dpkg-cross: Formerly (in dpkg-cross 0.x) it
+was a very lightweight clone of the real dpkg, emulating the most
+important options (install/remove/...) of the real dpkg, but
+nevertheless implementing its own package management. Now in
+dpkg-cross 1.x, a different approach is used: It converts the foreign
+architecture package to a cross compiling package (Architecture: all)
+that can then be installed with dpkg itself.
+
+The conversion works roughly as follows: dpkg-cross looks in the
+package for files in /lib, /usr/lib, /usr/X11R6/lib, /usr/include, and
+/usr/X11R6/include. Those are unpacked to a temporary directory,
+renamed to their final position in the filesystem hierarchy
+(/usr/local/m68k-linux), and a new package is built from the temp dir.
+For the library directories, only files directly in these directories
+are considered, subdirectories are ignored. Libraries and other linker
+auxiliary files (e.g. crt1.o) reside directly in the dir, not below.
+But for the include directories, subdirectories are of course not
+ignored. dpkg-cross moves all those files into $(CROSSLIB) or
+$(CROSSINC), resp., depending on the kind of their source directory.
+
+One complication are just some symlinks contain in some packages. E.g.
+libc5-dev contains a symlink /usr/lib/libc.so -> /lib/libc.so.5.x.y.
+This works for the native system, but not for cross compiling.
+dpkg-cross tries to handles such situations, but there are chances
+that more symlink problems can arise in future I haven't thought of...
+You've been warned :-)
+
+The control data of the package (package name, description, ...) are
+modified accordingly. The package name is rewritten to
+"<old-name>-<target-arch>-cross". Most interesting here is how
+dependencies are handled: For example, most -dev packages (containing
+headers) depend on the shared lib package of the same version. For
+this, the name of the depended-on packages also have the
+"<target-arch>-cross" suffix appended. This works smoothly in most
+cases. Just some dependencies are always left out, which don't fit the
+scheme above and aren't necessary for cross-compiling (gcc and
+binutils). Pre-Depends are changed to a simple Depends, and Conflicts,
+Provides, and Replaces are handled the same way as Depends. Recommends
+and Suggests are left out completely. The section is always changed to
+'devel', and the priority to 'extra'.
+
+All other meta-files in Debian packages (postinst, ...) are left out,
+too, except the shlibs files, which are needed later for dpkg-shlibdeps.
+
+BTW, you usually have to install both, the runtime lib package and the
+accompanying -dev developer's package. A runtime-only kit isn't very
+useful for a cross-compiling environment :-)
+
+dpkg-cross also has a conventient operating mode for updating existing
+cross installations. With the -u option, it scans all directories
+given as arguments for .deb packages (of the target architecture),
+that are already installed as cross packages, and where the version is
+newer than the installed version. After that, all the found packages
+are installed, as if you had given their names to dpkg-cross -i.
+dpkg-cross --query (or -Q) does the same, but just prints the list of
+available updates, and does not install them.
+
+
+3) dpkg-buildpackage
+--------------------
+
+3.1) General Usage
+..................
+
+dpkg-buildpackage is the main tool for cross compiling, though it's
+operation is rather simple: If called with the -a option, it sets a
+few environment variables that will override definitions in Makefiles,
+and then starts the real dpkg-buildpackage. Basic for that function is
+that Makefile variables *are* override-able from the environment, but
+that's a 'make' feature. And that most times, the same variable names
+are used for building tools, like $(CC), $(LD), ... dpkg-cross
+implements this setting of environment variables by putting a wrapper
+around dpkg-buildpackage, which is renamed to dpkg-buildpackage.orig.
+
+By default, dpkg-buildpackage sets the following environment variables
+if called with the -a option:
+
+  ARCH        = $(ARCH)
+  CC          = $(CROSSPREFIX)gcc
+  GCC         = $(CROSSPREFIX)gcc
+  LD          = $(CROSSPREFIX)gcc
+  AS          = $(CROSSPREFIX)as
+  AR          = $(CROSSPREFIX)ar
+  RANLIB      = $(CROSSPREFIX)ranlib
+  STRIP       = $(CROSSPREFIX)strip
+  IMAKECPP    = $(CROSSPREFIX)cpp
+  CONFIG_SITE = /etc/dpkg-cross/cross-config.linux
+  MAKEFLAGS   = -e
+
+The latter is necessary so that environment variables really override
+Makefile variables (see make(1)). $(ARCH) is determined from the
+argument of the -a command line option. $(CROSSPREFIX) is taken from
+/etc/dpkg-cross/cross-compile. Finally, /usr/local/bin is appended to $PATH,
+just in case some cross compiling tools should reside there. debmake's
+build resets $PATH to /bin:/sbin:/usr/bin:/usr/sbin:/usr/bin/X11, so
+this may be necessary.
+
+These settings should usually be sufficient for most packages. If you
+encounter that the Makefiles of the package need some other variables
+to be set, create a package-dependent section in
+/etc/dpkg-cross/cross-compile. And if a Makefile calls an
+architecture-dependent tool (e.g. ar, ranlib) directly, i.e. without
+referring to a variable, feel free to change that! IMHO it's a bug to
+hardwire those names...
+
+3.2) Support for Packages Using imake
+.....................................
+
+There are also some special features built into dpkg-buildpackage for
+packages using imake. First, IMAKECPP is defined in the environment as
+the target architecture's cpp, so that the imake templates know about
+the target. Otherwise, wrong definitions or the like are produced in
+the Makefile. Next, USRLIBDIR in the environment is set to CROSSLIB,
+because imake-generated Makefiles use this path with -L on the command
+line. If it would be the standard /usr/X11R6/lib, wrong libraries (the
+one from the host system) would be linked. And, finally, MANPATH is
+removed from the environment, because there's a Makefile variable of
+the same name, which shouldn't be affected by the user's setting of
+paths to search for man pages.
+
+3.3) Support for Packages Using autoconf
+........................................
+
+There are some packages that use GNU autoconf generated configure
+scripts. Part of the build process is to run configure with certain
+arguments. Though configure is basically well prepared for cross
+compiling, there may be some tests that fail for that reason.
+Specifically, configure will not be able to run any test programs,
+because they're not compiled for the build host architecture. This
+usually results in "cannot run test program when cross compiling"
+error messages from configure.
+
+To overcome this limitation, dpkg-cross uses the site file feature
+provided by configure. If the environment variable CONFIG_SITE is set,
+configure reads this file (a shell script) before loading
+config.cache. dpkg-cross provides such a site file in
+/etc/dpkg-cross/cross-config.linux. In this shell script, a few configure
+variables are preset to values known to be true for any Linux system,
+but that can't be determined by configure itself if cross compiling.
+cross-config.linux in turn includes another file, cross-config.$(ARCH)
+(in the same directory). In there, values depending on the target
+architecture are defined, e.g. ac_cv_c_bigendian or the like.
+
+Supplying those variable values from a file frees configure from
+the need to determine the values itself, which doesn't work (as stated
+above). The mechanism works, because we know that the target of cross
+compilation is a Linux system, with a known architecture. The values
+supplied in cross-config.* are best determined by running configure on
+a target system once, and then look up the values of interest in
+config.cache. This is how I constructed the example files coming with
+the dpkg-cross package.
+
+I admit, the method looks a bit strange, but in practice, it seems to
+work rather fine...
+
+3.4) Merging .changes Files
+...........................
+
+Ok, that's dpkg-buildpackage's main task, but it does a bit more for
+you: It also tries to merge resulting .changes files, so that you
+don't have to perform more than one upload job with dupload, which
+would also post more than one mail... The details of this merging are
+the following: If there's another .changes file in the parent
+directory (besides the one generated by this build run),
+dpkg-buildpackage will merge the following properties:
+
+ - All architecture names in the .changes' *file* name; more names are
+   concatenated with '+', e.g. you may get a xxx_1.2-3_i386+m68k.changes
+
+ - All architectures in the Architecture: field
+
+ - All lines in the Files: field; here, the newer .changes has
+   priority, if the same file should be mentioned in both .changes
+   files. This comes in handy if you, e.g., forgot to specify -b to
+   dpkg-buildpackage (or debmake's build) one time and thus built the
+   source package twice...
+
+I hope dpkg-buildpackage does the thing you expect it to do in this
+respect...
+
+Another feature: The current 1.4.0.7 (real) dpkg-buildpackage has a
+bug so that it always signs the .dsc file, even in a binary-only run
+(-b or -B). Either you get an error if no .dsc for the package exists
+in the parent directory, or it gets signed twice. The
+dpkg-buildpackage wrapper works around this by backing up an existing
+.dsc file and restoring it after the real dpkg-buildpackage finished.
+It also provides a dummy .dsc if there's none, to avoid "file not
+found" errors.
+
+3.5) Maintainer name handling
+.............................
+
+In dpkg-dev 1.4.0.17, dpkg-buildpackage versions always add a -u
+<maintainer> option to the pgp call, where <maintainer> is taken from
+the package's changelog. This is usually ok, but if you cross-compile
+packages, you often do this for binary-only uploads, so *your* address
+should be used for signing the .changes file, not the one of the
+original maintainer (whose private key you probably don't have :-)
+
+To fix this, you have to pass a -m<maintainer> option to
+dpkg-buildpackage. But this has another side effect: It also changes
+the Maintainer: field in the .changes file produced to the
+<maintainer> given with -m.
+
+I personally consider this a bug in dpkg-buildpackage, and it has
+already been reported as a bug, but I don't know yet how it will be
+fixed (probably separate options for the .changes file and pgg...)
+When there is some fix, a new version of dpkg-cross adapted to it will
+be released.
+
+But for the time being, dpkg-cross offers a workaround to the problem:
+You can configure a maintainer address to use in
+/etc/dpkg-cross/cross-compile with a line of the form
+
+  MAINTAINER = <address>
+
+The <something> will be passed as "-m<address>" to the original
+dpkg-buildpackage. If you don't configure a maintainer name, no -m
+option will be passed and dpkg-buildpackage's original behaviour will
+apply, i.e. extract the maintainer address from the changelog file.
+
+<address> should be the string you usually use as maintainer address,
+e.g.
+
+  Roman Hodek <Roman.Hodek@informatik.uni-erlangen.de>
+
+for me.
+
+
+4) dpkg-shlibdeps
+-----------------
+
+Another problem with cross compiling is (was :-) that dpkg-shlibdeps
+worked only on native binaries (i.e., ones compiled for the machine it
+is running on). This is caused by the fact that dpkg-shlibdeps calls
+ldd, which in turn relys on a ld.so feature: If you run a program with
+really no arguments, not even argv[0], it prints the shared libs to
+would link. This obviously cannot work for binaries of another
+architecture, since you can't run those.
+
+To solve this problem, the dpkg-cross package puts a wrapper also
+around dpkg-shlibdeps, that checks for a cross compile run (by testing
+$ARCH and $MAKEFLAGS environment variables). If that is the case, it
+implements another algorithm for finding shared library dependencies
+that also works for non-native executables.
+
+From the user's standpoint of view, the wrapper with the new algorithm
+should behave exactly like the original. Of course, the original is
+still used for native executables. There are only some prerequisites
+it needs to work properly: You must have installed cross compiling
+libraries with dpkg-cross, and you must have a objdump for the target
+architecture somewhere. dpkg-shlibdeps tries $(CROSSPREFIX)objdump
+(in $PATH), $(CROSSBIN)/objdump and objdump (in $PATH). The last
+catches cases where you have a multi-architecture objdump installed.
+
+If you're interested in the technical details: The .dynamic section of
+an ELF object/executable contains "NEEDED" entries for all other
+dynamic objects needed by this one. Among them are the needed
+libraries (which we're interested in), and the dynamic linker (which
+is filtered out). dpkg-shlibdeps lets objdump print this .dynamic
+entries (with the --private-headers option) and scans it for NEEDED
+entires with some like libxxx.so.y as value. After that, it determines
+the packages providing those libraries by searching the .list files in
+$(CROSSINFO). This means, you should have installed cross compiling
+libraries by dpkg-cross. After having found the package, the rest of
+processing is much like the original dpkg-shlibdeps, except that some
+mangling to the name of package name providing the shlibs file is
+necessary. (libc.so.6 is e.g. provided by libc6-m68k-cross, but libc6
+should be listed in the resulting dependencies.)
+
+
+5) /etc/dpkg-cross/cross-compile
+--------------------------
+
+dpkg-cross, dpkg-buildpackage, and dpkg-shlibdeps use a common
+configuration file, /etc/dpkg-cross/cross-compile, for path settings and
+package-specific definitions.
+
+In that file, comments start (as usual) with '#' and extend to the end
+of the line. Note that comments are *NOT* allowed after stuff doing
+something else, i.e. after variable definitions or the like. Write
+comments on their own lines.
+
+The first section of the file contains path settings for all
+dpkg-cross utilities. They have the form
+
+    varname = value
+
+(as you'd expect :-). The value on the right side can contain
+references to other variables in the form
+
+    $(VARIABLE)
+
+Note that in references, variable names must be all uppercase, while
+in definitions they're all lowercase. You can refer to all global
+dpkg-cross variables, i.e. the ones defined in this section, and
+additionally to $(ARCH) (which is set from the command line on
+dpkg-cross and dpkg-buildpackage), and to every other environment
+variable. Though environment variables have lower precedence than
+internal variables.
+
+The following variables can be defined in this first section:
+
+ - crossbase (default: /usr/local)
+
+   This is the path prefix for all other cross compiling paths below.
+   It is used in their default definition, but a user definition need
+   not necessarily use it. It's just there for anchoring other paths
+   into a common filesystem hierarchy.
+
+   Also already stated, IMHO cross compiling binaries and support
+   files belong into /usr/local, since they're not part of the
+   standard Debian distribution, but you've installed them locally.
+   That's why /usr/local is the default. If your opinion differs, just
+   define a different crossbase.
+
+ - crossdir (default: $(CROSSBASE)/$(ARCH)-linux)
+
+   This is the base directory for a specific architecture.
+   $(ARCH)-linux is the standard target name, as used by gcc. (I
+   assume you're cross compiling for Linux :-)
+
+ - crossbin (default: $(CROSSDIR)/bin)
+
+   This directory contains the binaries for cross compiling (gcc, as,
+   ld, ...). It's mainly intended for referring to in other definitions
+   (most probably some tool in a package-specific definition), but
+   dpkg-shlibdeps also uses it as one alternative to locate a objdump
+   that can parse objects of the architecture in question.
+
+ - crosslib (default: $(CROSSDIR)/lib)
+
+   This directory contains libraries and other linker support files
+   (crt1.o ...) for cross compiling. The setting is used by
+   dpkg-cross as place where to install files from usual /usr/lib,
+   /lib, and /usr/X11R6/lib. It should also be one of the default
+   library paths compiled into a cross gcc. (gcc's configure should
+   have done that for you, it chooses $(prefix)/$(target)/lib).
+
+ - crossinc (default: $(CROSSDIR)/include)
+
+   This directory contains headers for cross compiling. The setting is
+   used by dpkg-cross as place where to install files from usual
+   /usr/include and /usr/X11R6/include. It also should be one of the
+   default directories compiled into a cross gcc/cpp. (gcc's configure
+   should have done that for you, it chooses
+   $(prefix)/$(target)/include).
+
+ - crossinfo (default: $(CROSSLIB)/dpkg-cross-info)
+
+   In this directory dpkg-cross installs its auxiliary .list and
+   .shlibs files. It's similar to /var/lib/dpkg/info for the native
+   system.
+
+ - crossprefix (default: $(ARCH)-linux-)
+
+   This is the prefix for cross compiling binaries, like gcc. The
+   default naming is GNU convention, e.g. you could have
+   m68k-linux-gcc in your $PATH. They're are usually symlinks to the
+   corresponding tools in $(CROSSBIN), and having them is simply a
+   matter of convenience: You then have the cross compiling tools with
+   a distinctive name in your $PATH and can call them without writing
+   an explicit path. $(CROSSPREFIX) is mainly intended for referring to
+   in other definitions, but dpkg-shlibdeps also uses it as one
+   alternative to locate a objdump that can parse objects of the
+   architecture in question (it tries ``$(CROSSPREFIX)objdump'').
+
+Other sections after the first global one are started with a line with
+the following format:
+
+    package:
+
+where package is the (source) package name of some package you intend
+to cross-compile. The definitions in such a package-specific section
+look exactly the same as global definitions, but they define
+additional environment variables to be set by dpkg-buildpackage if
+compiling the package in question. This can be used if the package's
+Makefiles use some strange variable for some purpose, or you have to
+override something else for cross compiling.
+
+For example, I know the amd Makefiles to insist on using $(SYSCC) for
+compiling some of the sources. If you don't take special precautions
+about this, $(SYSCC) has been defined to be 'gcc' by the Makefile,
+thus the objects will be native objects and can't be linked in the
+end. So you have to override $(SYSCC) to be m68k-linux-gcc, too, and
+you can do this by adding
+
+    amd:
+        SYSCC = $(CROSSPREFIX)gcc
+
+to /etc/dpkg-cross/cross-compile.
+
+Another use could be if your Makefiles include e.g. -m486 into
+$(CFLAGS), which obviously works only on the i386 architecture. In
+this case, you can also define an environment override for CFLAGS,
+without the -m486 this time.
+
+
+6) /etc/dpkg-cross/cross-config.*
+---------------------------
+
+These files define some (shell) variables for configure, that cannot
+be determined in a cross compiling environment. If they wouldn't be
+defined here, configure would either use a conservative default, or
+abort with an error message. Defining the values in question looks to
+configure as they would have been cached in a previous run, so the
+corresponding test needs not be run.
+
+Since supplying fixed answers for questions that configure asks is
+against its purpose, really only those values should be defined that
+cannot be detemined when cross compiling. This group again can be
+split into two subgroups: Linux-specific values (the target is always
+a Linux system, since we're building Debian packages), and values
+specific to the target architecture. Therefore, there are actually
+several cross-config files:
+
+ - cross-config.linux: This file records values that are common to all
+   Linux systems, for example ac_cv_header_stdc (standard ANSI headers
+   present). At its end, cross-config.linux includes the architecture
+   specific file, by replacing "linux" in the filename with the
+   environment variable $ARCH (as defined by dpkg-buildpackage).
+
+ - cross-config.$(ARCH): This family of files records values specific
+   to the target architecture, like ac_cv_c_bigendian or
+   ac_cv_sizeof_long (could be 8 on 64-bit systems).
+
+The dpkg-cross package supplies examples for these files, which
+already contain some common values. (I determined them from tetex-bin,
+which runs a lot of configures.) But it is not unlikely that for some
+package values are missing. In this case, you'll have to add those
+values to the appropriate cross-config.* file.
+
+The way to do this is usually to run configure on a machine of the
+target architecture (i.e., most probably, do one native build), and
+then look up the answers you need from the config.cache created.
+Then decide whether the answer is Linux-specific or target-specific,
+and add an assignment to the appropriate cross-config.* file.
+
+If you don't want to run configure many times to see whether it still
+gets an error, you can also search the configure script itself for
+tests critical in respect to cross compiling. Just search for the the
+variable $cross_compiling. Tests of this variable indicate that you'll
+have some work here. Common are two kinds of usage: First, that a test
+isn't done at all if cross compiling. This looks like
+
+  if test "$cross_compiling" = yes; then
+  	:
+  else
+   # ...
+  fi
+
+i.e., the test procedure is simply skipped. In this case, the variable
+is still undefined afterwards, and the test is probably considered to
+have failed. It is usually a good idea to determine which value the
+variable would have had when compiling natively, and then add it to
+cross-config.*, but doing so is not strictly necessary. You may "just"
+loose some features, or the package may use unnecessary workarounds.
+
+The worse case is if configure would issue an error. The code usually
+looks like:
+
+echo $ac_n "checking ..."
+if ac_cv_xxx is set; then
+  echo $ac_n "(cached) $ac_c" 1>&6
+else
+  if test "$cross_compiling" = yes; then
+    { echo "configure: error: can not run test program while cross compiling" 1>&2; exit 1; }
+  else
+    # do test...
+  fi
+fi
+
+In this case, it is a must to determine the correct value for
+ac_cv_..., and add it to one of the cross-config.* files. One note: if
+the value is not cached at all, i.e. the "is it already in the cache"
+test at the beginning is missing, you're out of luck :-( Then, you
+have no way to avoid the error when cross compiling :-((
+
+And, if you have to add values to cross-config.*, could you please
+send me a short note? Then I could add those settings to the
+distribution's files, so that other people later won't have to
+determine them again... Thanks!
+
+
+7) Conversion of Old Installations
+----------------------------------
+
+From version 0.x to 1.x of dpkg-cross, the way cross-compiling
+libraries and header are installed has changed. Formerly, dpkg-cross
+implemented its own, rudimentary package management. This has been
+superseeded by using dpkg for this job, and converting native packages
+to cross-compiling packages.
+
+One effect of this for you is that --if you upgrade from a 0.x to a
+1.x version-- you have to convert your installation to the new format.
+There is a conversion utility, dpkg-cross-convert, that does most of
+the job automatically.
+
+However, there's a little problem: With the new format, dpkg-cross
+needs package meta-data (aka control infos) that weren't stored with
+the old format. To fix this, dpkg-cross-convert somehow needs to get
+its hands on those infos. Furthermore, the infos must be for the
+correct version of the package. There are several ways for this:
+
+ - /var/lib/dpkg/available and /var/lib/dpkg/status
+   Those files list packages for the native system, but architecture
+   doesn't matter for the needed meta-infos. So if the to-be-converted
+   package is also installed or available as native package in the
+   same version, the needed infos can be taken from one of the two
+   files mentioned above.
+
+ - Some Packages or Packages.gz file from the Debian archive. Best use
+   the one for your target architucture, but also a different one can
+   help.
+
+ - Finally, a .deb package of correct version, but architecture
+   doesn't matter.
+
+You can list any of these sources (except the first, those files are
+searched automatically) on the command line. dpkg-cross-convert
+determines the file type itself and tries to extract the infos it
+needs.
+
+dpkg-cross-convert will convert as much packages as it can. If it
+can't convert some, it will tell you about this at the end. Most
+probably, it can't find the appropriate control infos. In this case,
+try to give more control info sources. If this isn't possible (e.g.
+because you had a real old version installed that isn't available
+anymore anywhere), best do the following: After only those old,
+unconvertable packages are installed the old way, call
+dpkg-cross-convert --purge. This will list you the affected packages a
+last time, and them remove the remainders of the old installation.
+After this, you can use dpkg-cross --install the usual way to install
+new versions of the missing packages.
+
+If just an installation of an converted package with dpkg failed (e.g.
+due to dependency errors), the .deb file is left in /tmp, so that you
+can install it manually later.
+
+
+8) Cross Installation on a Separate Partition (Hurd)
+----------------------------------------------------
+
+Starting with version 1.3, dpkg-cross also allows a special setup
+variation. If you have a complete Debian installation of the target
+architecture on the same machine (in another partition), then things
+have to be managed differently. This case isn't academic, it's quite
+usual with Hurd. Since Hurd is just another OS besides Linux, there's
+good reason to have it on the same machine, opposed to Linux for
+another CPU... (how would you run that? :-) But compiling for Hurd
+under Linux is still cross-compiling. With the help of Santiago Vila
+<sanvila@unex.es> dpkg-cross has been adapted to work in this case,
+too. However, it's not necessarily limited to Hurd. You could also
+have a Debian installation for a different CPU mounted somewhere
+(maybe on a removable medium), and the methods described below should
+still work (but it's untested...)
+
+The key to the complete-target-Debian-system-mounted-somewhere
+approach is a definition like
+
+  crossroot-hurd-i386 = /gnu
+
+in /etc/dpkg-cross/cross-compile. If you then do
+
+  dpkg-buildpackage -ahurd-i386
+
+for some package, the dpkg-buildpackage wrapper will see that there's
+a crossroot definition for the current target architecture and use it.
+In general, if and only if the string after a "crossroot-" definition
+matches the current arch, that definition will take effect. This way
+you can put more than one crossroot definition for different target
+archs into your /etc/dpkg-cross/cross-compile.
+
+All the following only applies if a $(CROSSROOT) is defined. The value
+of $(CROSSROOT) should be the path where the target Debian system is
+mounted. In this path, at least libraries and .shlibs files in
+$CROSSROOT/var/lib/dpkg/info are expected. The libraries are searched
+for in $(CROSSLIB), which defaults to $(CROSSROOT)/lib, which is
+appropriate for Hurd. Unfortunately, multiple lib directories aren't
+supported yet. Tell me if you need it!
+
+With the CROSSROOT approach, dpkg-cross isn't needed at all. Since
+there is already a Debian system for the target architecture, we do
+not need to install cross libraries and headers again. It's simply
+assumed that the installation is managed by means outside of the
+dpkg-cross utilities (probably by dpkg when running the target OS :-)
+What you still need is a cross compiler of some kind. The only parts
+of dpkg-cross used with $CROSSROOT are dpkg-buildpackage, which sets
+some environment variables as usual, and dpkg-shlibdeps. There the
+most changes for $CROSSROOT had to be done, mainly it now looks in
+$CROSSROOT/var/lib/dpkg/info for .shlibs files, and uses dpkg --search
+--root=$CROSSROOT for determining the package a library belongs to.
+
+Another change for Hurd (not really related to $CROSSROOT) is that the
+binutils environment variables (LD, AS, AR, RANLIB, STRIP) are not
+defined if the target CPU is the same as the native CPU. In this case,
+the usual binutils will work, so overriding those tools is not
+necessary.
+
+Roman Hodek <Roman.Hodek@informatik.uni-erlangen.de>
+Thu, 29 Oct 1998
+

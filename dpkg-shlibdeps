@@ -1,0 +1,321 @@
+#!/usr/bin/perl
+#
+#  dpkg-shlibdeps - Alternative implementation for non-native binaries
+#  Copyright (C) 1997-2000  Roman Hodek <roman@hodek.net>
+#  Copyright (C) 2004  Nikita Youshchenko <yoush@cs.msu.su>
+#  Copyright (C) 2004  Raphael Bossek <bossekr@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#  $Id: dpkg-shlibdeps,v 1.10 2005/07/25 19:11:54 yoush-guest Exp $
+
+require "dpkg-cross.pl";
+
+dpkgcross_application();
+
+# Sometimes we libraries should be looked for in $crosslib64 instead of $crosslib
+# To detect that cases, we will check "file format" line in objdump output and
+# check if the result is in the following list.
+@crosslib64formats = ("elf64-sparc", "elf64-s390", "elf64-x86-64", "elf64-powerpc");
+
+$dpkglibdir= "/usr/lib/dpkg";
+
+use POSIX;
+use POSIX qw(:errno_h :signal_h);
+
+read_config();
+setup();
+
+$shlibsoverride= "$crossroot/etc/dpkg/shlibs.override";
+$shlibsdefault= "$crossroot/etc/dpkg/shlibs.default";
+$shlibslocal= $ENV{"SHLIBSLOCALFILE"} || 'debian/shlibs.local';
+$shlibsppdir= "$crossroot/var/lib/dpkg/info";
+$shlibsppext= '.shlibs';
+$varnameprefix= 'shlibs';
+$dependencyfield= 'Depends';
+$varlistfile= $ENV{"SUBSTVARSFILE"} || 'debian/substvars';
+@depfields= qw(Suggests Recommends Depends Pre-Depends);
+
+push(@INC,$dpkglibdir);
+require 'controllib.pl';
+
+sub usage {
+	# print original message
+	system "dpkg-shlibdeps.orig -h";
+	# and our comments...
+    print STDERR <<'EOF';
+
+dpkg-cross cross-compiling extension: Recognizes non-native binaries (on which
+ldd fails) and treats them differently to extract shlibs information.
+EOF
+}
+
+$i = 0;
+grep( $depstrength{$_} = ++$i, @depfields );
+
+# parse options
+while (@ARGV) {
+    $_ = shift(@ARGV);
+    if (m/^-T/) {
+        $varlistfile = $';
+    }
+	elsif (m/^-p(\w[-:0-9A-Za-z]*)$/) {
+        $varnameprefix = $1;
+    }
+	elsif (m/^-L/) {
+        $shlibslocal = $';
+    }
+	elsif (m/^-O$/) {
+        $stdout = 1;
+    }
+	elsif (m/^-h$/) {
+        usage();
+		exit 0;
+    }
+	elsif (m/^-c/) {
+		$conffile = $';
+    }
+	elsif (m/^-d/) {
+        $dependencyfield = capit($');
+        defined($depstrength{$dependencyfield}) ||
+            &warn("unrecognised dependency field \`$dependencyfield'");
+    }
+	elsif (m/^-e/) {
+        push( @exec, $' );
+		push( @execf, $dependencyfield );
+    }
+	elsif (m/^-/) {
+        usageerr( "unknown option \`$_'" );
+    }
+	else {
+        push( @exec, $_ );
+		push( @execf, $dependencyfield );
+    }
+}
+@exec || usageerr( "need at least one executable" );
+
+# Remove most of LD_LIBRARY_PATH. We don't use it, and it can
+# lead to attempts to link non-native libraries into tools that
+# we call. At least cross-building of zlib was affected by this.
+convert_ld_library_path();
+
+# Look at all given executables and try to extract the names of linked shared
+# libraries. For multiple executables one and the same library can be referenced
+# more then once. Only one the first library will be remembered. In other words,
+# the list of libraries is unique.
+@libname = @libsoname = @libpath = @libf = qw();
+for( $i = 0; $i <= $#exec; $i++ ) {
+	# Use detect_arch() to find out architecture of $exec[$i] (and if
+	# it is executable or not).
+	my $arch = detect_arch($exec[$i]);
+	next unless $arch;	# Skip unknown files
+	$objdump = get_tool($arch, "objdump", $ENV{"DPKGCROSSMODE"});
+	# Look for NEEDED entries in the .dynamic section of an ELF
+	# executable. There all needed libraries are listed (without a
+	# path, but that should always be $crosslib for our purposes).
+	open( PIPE, "LC_ALL=C $objdump --private-headers -- $exec[$i] 2>&1 |" )
+		|| syserr( "cannot exec $objdump" );
+	
+	# Counts how many library references exists for this executable.
+	$nthisldd = 0;
+	$thiscrosslib = $crosslib;
+	while( <PIPE> ) {
+		chomp;
+		my ($libname_, $libsoname_, $p);
+		if (/^\s*\S+:\s*file\s+format\s+(\S+)\s*$/) {
+			if (grep {$_ eq $1} @crosslib64formats) {
+				$thiscrosslib = $crosslib64;
+			}
+			next;
+		}
+		elsif (/^\s*NEEDED\s+(lib\S+)\.so\.(\S+)$/) {
+			$libname_ = $1;
+			$libsoname_ = $2;
+			$p = "$thiscrosslib/$1.so.$2";
+		}
+		# Alternate form: used e.g. for libdb2.4 with 'libdb-4.2.so' soname
+		elsif (/^\s*NEEDED\s+(lib[^-]+)-(.+)\.so$/) {
+			$libname_ = $1;
+			$libsoname_ = $2;
+			$p = "$thiscrosslib/$1-$2.so";
+		}
+		else {
+			# No library reference found so continue with the next line.
+			next;
+		}
+
+		# An another library found. Check if we know already the library. If not,
+		# continue with storing additional information for future post-proceeding.
+		$nthisldd++;
+		$p =~ s/^\Q$crossroot\E// if $crossroot;
+		if (!$libpathadded{$p}++) {
+			push( @libname, $libname_ );
+			push( @libsoname, $libsoname_ );
+			push( @libpath, $p );
+			push( @libf, $execf[$i] );
+			push( @crosslibs, $thiscrosslib ); # used for diagnostic only
+		}
+	}
+    close( PIPE );
+    $? && subprocerr( "$objdump on \`$exec[$i]'" );
+    $nthisldd || &warn( "no library references found in \`$exec[$i]'" );
+}
+
+# A library may be a part of package being built.
+# In this case, dpkg --search will not find it (unless an earlier version
+# of the package is installed).
+# So we should not pass to dpkg paths to any libs defined in shlibs.local
+# and shlibs.override
+for( $i = 0; $i <= $#libname; $i++ ) {
+    scanshlibsfile( $shlibslocal, $libname[$i], $libsoname[$i], $libf[$i] ) && next;
+    scanshlibsfile( $shlibsoverride, $libname[$i], $libsoname[$i], $libf[$i] ) && next;
+    push( @safelibpaths, $libpath[$i] );
+    $needtoscan[$i] = 1;
+}
+
+if ($#safelibpaths >= 0) {
+#    grep(s/\[\?\*/\\$&/g, @safelibpaths);
+    defined($c = open(P,"-|")) || syserr("cannot fork for dpkg --search");
+    if (!$c) {
+        $ENV{'LC_ALL'} = 'C';
+    	my @args = ("dpkg", "--search");
+	push( @args, "--root=$crossroot" ) if $crossroot;
+	push( @args, "--", @safelibpaths );
+	exec(@args);
+	syserr("cannot exec dpkg");
+    }
+    while (<P>) {
+	chomp;
+	if (m/^local diversion |^diversion by/) {
+            &warn("diversions involved - output may be incorrect");
+            print(STDERR " $_\n") || syserr("write diversion info to stderr");
+	} elsif (m/^(\S+(, \S+)*): (\/.+)$/) {
+	    $pathpackages{$+}= $1;
+	} else {
+	    &warn("unknown output from dpkg --search: \`$_'");
+	}
+    }
+    close(P);
+    $? && subprocerr("dpkg --search");
+}
+
+LIB: for( $i = 0; $i <= $#libname; $i++ ) {
+
+    $needtoscan[$i] || next;
+
+    if (!defined($pathpackages{$libpath[$i]})) {
+        &warn("could not find any packages for $crossroot$libpath[$i]".
+              " ($libname[$i].so.$libsoname[$i])");
+    } else {
+	@packages= split(/, /,$pathpackages{$libpath[$i]});
+	for $p (@packages) {
+	    scanshlibsfile("$shlibsppdir/$p$shlibsppext", $libname[$i],$libsoname[$i],$libf[$i])
+				&& next LIB;
+	}
+    }
+    scanshlibsfile( $shlibsdefault, $libname[$i], $libsoname[$i], $libf[$i] ) && next;
+
+    &warn("unable to find dependency information for ".
+          "shared library $libname[$i] (soname $libsoname[$i], path ".
+		  ($crossroot ? $crossroot : $crosslibs[$i])."/$libpath[$i], ".
+          "dependency field $libf[$i])");
+}
+
+
+sub scanshlibsfile {
+    my( $fn, $ln, $lsn, $lf ) = @_;
+    my( $da, $dv, $dk );
+
+    $fn= "./$fn" if $fn =~ m/^\s/;
+    if (!open( SLF,"< $fn" )) {
+        $! == ENOENT || syserr( "unable to open shared libs info file \`$fn'");
+        return 0;
+    }
+    while (<SLF>) {
+        s/\s*\n$//;
+		next if m/^\#/;
+		
+        if (!m/^\s*(\S+)\s+(\S+)/) {
+            &warn( "shared libs info file \`$fn' line $.: bad line \`$_'" );
+            next;
+        }
+        next if $1 ne $ln || $2 ne $lsn;
+        $da= $';
+        for $dv (split(/,/,$da)) {
+            $dv =~ s/^\s+//; $dv =~ s/\s+$//;
+            if (defined($depstrength{$lf})) {
+                if (!defined($predefdepfdep{$dv}) ||
+                    $depstrength{$predefdepfdep{$dv}} < $depstrength{$lf}) {
+                    $predefdepfdep{$dv}= $lf;
+                }
+            } else {
+                $dk= "$lf: $dv";
+                if (!defined($unkdepfdone{$dk})) {
+                    $unkdepfdone{$dk}= 1;
+                    $unkdepf{$lf}.= ', ' if length($unkdepf{$lf});
+                    $unkdepf{$lf}.= $dv;
+                }
+            }
+        }
+        return 1;
+    }
+    close(SLF);
+    return 0;
+}
+
+if (!$stdout) {
+    $varlistfile = "./$varlistfile" if $varlistfile =~ m/^\s/;
+	
+    open( Y, "> $varlistfile.new" ) ||
+        syserr( "open new substvars file \`$varlistfile.new'" );
+    chown( @fowner, "$varlistfile.new" ) ||
+		syserr( "chown of \`$varlistfile.new'" );
+
+    if (open( X, "<$varlistfile" )) {
+        while( <X> ) {
+            s/\n$//;
+            next if m/^(\w[-:0-9A-Za-z]*):/ && $1 eq $varnameprefix;
+            print( Y "$_\n" ) ||
+                syserr( "copy old entry to new varlist ".
+					    "file \`$varlistfile.new'" );
+        }
+    }
+	elsif ($! != ENOENT) {
+        syserr( "open old varlist file \`$varlistfile' for reading" );
+    }
+    $fh= 'Y';
+} else {
+    $fh= 'STDOUT';
+}
+
+for $dv (sort keys %predefdepfdep) {
+    $lf = $predefdepfdep{$dv};
+    $defdepf{$lf} .= ', ' if length($defdepf{$lf});
+    $defdepf{$lf} .= $dv;
+}
+for $lf (reverse @depfields) {
+    next unless defined($defdepf{$lf});
+    print( $fh "$varnameprefix:$lf=$defdepf{$lf}\n" )
+        || syserr( "write output entry" );
+}
+for $lf (sort keys %unkdepf) {
+    print( $fh "$varnameprefix:$lf=$unkdepf{$lf}\n" )
+        || syserr( "write userdef output entry" );
+}
+close($fh) || syserr( "close output" );
+if (!$stdout) {
+    rename( "$varlistfile.new",$varlistfile ) ||
+        syserr( "install new varlist file \`$varlistfile'" );
+}

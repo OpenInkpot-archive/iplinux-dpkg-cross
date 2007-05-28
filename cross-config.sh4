@@ -1,0 +1,11 @@
+# sh4 specific configure variables
+. `dirname $ac_site_file`/cross-config.sh
+ac_cv_c_bigendian=no
+ac_cv_linux_vers=2.6.12
+jm_cv_func_working_re_compile_pattern=yes
+ac_use_included_regex=no
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_have_abstract_sockets=yes
+ac_cv_func_posix_getpwnam_r=yes
+glib_cv_monotonic_clock=yes
+sudo_cv_uid_t_len=10

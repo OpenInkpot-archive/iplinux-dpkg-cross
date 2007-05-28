@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+
+#  Strip wrapper that autodetects correct strip binaries for
+#  given arguments.
+#
+#  Copyright (C) 2004-2005  Nikita Youshchenko <yoush@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#  $Id: strip,v 1.5 2005/11/06 17:04:24 yoush-guest Exp $
+
+use strict;
+
+require "dpkg-cross.pl";
+read_config();		# to get $crossprefix ...  probably non needed?
+
+# Remove most of LD_LIBRARY_PATH. We don't use it, and it can
+# lead to attempts to link non-native libraries into tools that
+# we call. At least cross-building of zlib was affected by this.
+convert_ld_library_path();
+
+# Current dpkg-cross mode
+my $mode = $ENV{"DPKGCROSSMODE"} || "default";
+
+# Collect non-file arguments to pass to all strip's
+my @nonfile_args;
+
+# Arguments for particular strip's, keyed by strip executable paths
+my %cmdlines;
+
+# Flag set to 1 if '--' argument is seen
+my $allfiles = 0;
+# Flag set to 1 if next argument is a parameter for the previous argument
+my $argparam = 0;
+
+for my $arg (@ARGV) {
+	if (!$allfiles && ($argparam || ($arg =~ /^-/))) {
+		if (!$argparam) {
+			$allfiles = 1 if ($arg eq "--");
+			$argparam = 1 if ($arg =~ /^-[FIOKNRo]$/);
+		} else {
+			$argparam = 0;
+		}
+		push @nonfile_args, $arg;
+		push @{$cmdlines{$_}}, $arg for (keys %cmdlines);
+		next;
+	}
+
+	my $arch = detect_arch($arg);
+	my $strip = get_tool($arch, "strip", $mode);	# This will get /usr/bin/strip for unknown arch
+
+	$cmdlines{$strip} = [ @nonfile_args ] if (!defined($cmdlines{$strip}));
+	push @{$cmdlines{$strip}}, $arg;
+}
+
+# If no file arguments found, just call /usr/bin/strip
+$cmdlines{"/usr/bin/strip"} = [ @nonfile_args ] if (scalar(keys(%cmdlines)) == 0);
+
+# Now call all strip's and return non-zero if any one returned non-zero
+my $retval = 0;
+for my $strip (keys(%cmdlines)) {
+	print "+ $strip " . join(" ", @{$cmdlines{$strip}}) . "\n";
+	$retval = 1 if (system($strip, @{$cmdlines{$strip}}) != 0);
+}
+
+exit $retval;

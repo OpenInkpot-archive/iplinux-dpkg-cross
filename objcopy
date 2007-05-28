@@ -1,0 +1,57 @@
+#!/usr/bin/perl
+
+#  Objdump wrapper that autodetects correct objdump binaries for
+#  given arguments. Based on similar strip wrapper.
+#
+#  Copyright (C) 2005  Nikita Youshchenko <yoush@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#  $Id: objcopy,v 1.3 2005/12/01 11:45:51 yoush-guest Exp $
+
+use strict;
+
+require "dpkg-cross.pl";
+read_config();		# to get $crossprefix ...  probably non needed?
+
+# Current dpkg-cross mode
+my $mode = $ENV{"DPKGCROSSMODE"} || "default";
+
+# Unlike strib and objdump, objcopy has a single source file.
+# So we should not run multiple objcopy executables for different arguments.
+# We should just find the file argument, detect it's arch, and run proper
+# objcopy.
+
+my $skip = 0;
+my $executable = "/usr/bin/objcopy";
+
+for my $arg (@ARGV) {
+	if ($skip) {
+		$skip = 0;
+		next;
+	}
+	if ($arg =~ /^-[FIOBKNGLWbijR]$/) {
+		$skip = 1;
+		next;
+	}
+	if ($arg =~ /^-/) {
+		next;
+	}
+	$executable = get_tool(detect_arch($arg), "objcopy", $mode);
+	last;
+}
+	
+print "+ $executable " . join(" ", @ARGV) . "\n";
+exec($executable, @ARGV);

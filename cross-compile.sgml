@@ -1,0 +1,265 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.1//EN" [
+  <!ENTITY applname "cross-compile">
+  <!ENTITY revision "$Revision: 1.11 $">
+  <!ENTITY man_dpkg-cross "<citerefentry><refentrytitle>dpkg-cross</refentrytitle><manvolnum>1</manvolnum></citerefentry>">
+  <!ENTITY man_cross-compile "<citerefentry><refentrytitle>cross-compile</refentrytitle><manvolnum>5</manvolnum></citerefentry>">
+  <!ENTITY dpkg-cross "<application>dpkg-cross</application>">
+  <!ENTITY dpkg-buildpackage "<application>dpkg-buildpackage</application>">
+  <!ENTITY dpkg-shlibdeps "<application>dpkg-shlibdeps</application>">
+  <!ENTITY gccross "<application>gccross</application>">
+  <!ENTITY readme-debian "<filename>/usr/share/doc/dpkg-cross/README.Debian.gz</filename>">
+  <!ENTITY seealso "&man_dpkg-cross;, &man_cross-compile;, &readme-debian;">
+  <!ENTITY year "1997">
+  <!ENTITY username "Roman Hodek">
+  <!ENTITY useremail "<email>&lt;roman@hodek.net&gt;</email>">
+]>
+<refentry>
+  <refmeta>
+    <refentrytitle>cross-compile</refentrytitle>
+    <manvolnum>5</manvolnum>
+  </refmeta>
+  <refnamediv>
+    <refname>&applname;</refname>
+    <refpurpose>Configuration for dpkg-cross and relatives</refpurpose>
+  </refnamediv>
+  <refsect1>
+    <title>DESCRIPTION</title>
+    <para>This file defines some settings for &dpkg-cross;, and the
+      multi-architecture extensions of &dpkg-buildpackage; and &dpkg-shlibdeps;,
+      also provided by the &dpkg-cross; package.</para>
+    <para>This file may be located either in user's home directory or system wide.
+      User path is <filename>$HOME/.dpkg-cross/cross-compile</filename>, system path
+      is <filename>/etc/dpkg-cross/cross-compile</filename>.</para>
+    <para>Comments start with a '#' and continue to the end of the line. They
+      are allowed only on their own lines, not after variable definitions.
+      Variable definitions have the general form
+      <blockquote><para>varname = value
+        </para></blockquote>
+      </para>
+    <para>Values on the right side can contain references to other variables or
+      to environment variables (with lower precedence) in the form
+      <quote>$(VARIABLE)</quote>. The referred name must be all uppercase, whereas
+      names in definitions are all lowercase. Recursive references are not
+      allowed. <quote>$(ARCH)</quote> can always be used, and is set automatically to
+      the architecture for which compiling is done.</para>
+    <para>In the first package-independent part of the file, the following
+      variables can be defined:</para>
+    <variablelist>
+      <varlistentry>
+        <term>default_arch (default: none)</term>
+        <listitem>
+          <para>If not other specified this architecture is used for dpkg-cross tools.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossroot-arch (default: none)</term>
+        <listitem>
+          <para>If <replaceable>arch</replaceable> matches the current target architecture (selected by a
+            <option>-a</option> option), then this definition of <quote>$(CROSSROOT)</quote> will
+	    take place. It tells &dpkg-cross; that there is a complete Debian installation for the
+            target arch mounted somewhere, in the path which is the value of the
+            definition. If a <quote>$(CROSSROOT)</quote> definition is active, some of the other
+            variables change their meaning. For a complete description, best refer
+            to &readme-debian;.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossbase (default: /usr)</term>
+	<listitem>
+	  <para>This is the path prefix for all other cross compiling paths below. It
+            is used in their default definition, but a user definition need not
+            necessarily use it.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossdir (default: $(CROSSBASE)/$(DEB_HOST_GNU_TYPE))</term>
+	<listitem>
+	  <para>This is the base directory for a specific architecture.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossbin (default: $(CROSSDIR)/bin)</term>
+	<listitem>
+	  <para>This directory contains binaries for cross compiling (<application>gcc</application>,
+	    <application>as</application>, <application>ld</application>, ...).
+	    It's mainly intended for refering to, but &dpkg-shlibdeps; also
+            uses it as one alternative to locate a <application>objdump</application> that
+	    can parse objects of the architecture in question.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crosslib (default: $(CROSSDIR)/lib or $(CROSSROOT)/lib, resp.)</term>
+	<listitem>
+	  <para>This directory contains libraries and other linker support files (e.g.
+            <filename>crt1.o</filename>) for cross compiling. The setting is used by
+	    &dpkg-cross; as place where to install files from usual <filename>/lib</filename>,
+	    <filename>/usr/lib</filename>, and <filename>/usr/X11R6/lib</filename>. Also
+	    &dpkg-shlibdeps; expects target arch libraries in this directory. This is
+	    specially important if <quote>$(CROSSROOT)</quote> is defined.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>crosslib64 (default: $(CROSSLIB)64)</term>
+	<listitem>
+	  <para>On targets that have both 32bit and 64bit variants, this directory
+	    contains 64bit versions of libraries and other linker support files. This
+	    setting is used by &dpkg-cross; as place where to install files from
+	    <filename>/lib64</filename>, <filename>/usr/lib64</filename>, and
+	    <filename>/usr/X11R6/lib64</filename>. Note that this setting is NOT used for
+	    64bit-only targets (such as <quote>ia64</quote>).</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossinc (default: $(CROSSDIR)/include)</term>
+	<listitem>
+	  <para>This directory contains headers for cross compiling. The setting is
+            used by &dpkg-cross; as place where to install files from usual
+            <filename>/usr/include</filename> and <filename>/usr/X11R6/include</filename>.
+	    Unused if <quote>$(CROSSROOT)</quote> is defined.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>crossprefix (default: $(CPU)-$(OS)-)</term>
+	<listitem>
+	  <para>This is the prefix for cross compiling binaries, like
+	    <application>gcc</application>. The default naming is GNU convention, e.g.
+	    you could have <application>m68k-linux-gcc</application> in your PATH.
+	    It is mainly intended for refering to, but &dpkg-shlibdeps; also
+            uses it as one alternative to locate a objdump that can parse objects
+            of the architecture in question (it tries <quote>$(CROSSPREFIX)objdump</quote>).</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>removedeps</term>
+	<listitem>
+	  <para>This variable defines comma-separated list of package names that
+            should be removed from any dependency fields (Depends:, Conflicts:, etc)
+            of the generated packages. This is useful when original native package
+            depends on packages like <application>xfree86-common</application> or
+	    <application>gpm</application>, that are of no value for cross-compilation.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>keepdeps</term>
+	<listitem>
+	  <para>This variable defines comma-separated list of package names that
+            should be kept as is, without adding <emphasis>-arch-cross</emphasis> suffix,
+            in all dependency fields (Depends:, Conflicts:, etc) of the generated
+            packages. This is useful for packages like <application>bison</application>,
+	    when host version of package can satisfy the dependency.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>compilerpath (default: /bin:/usr/bin)</term>
+	<listitem>
+	  <para>This variable defines colon-separated list of directories where &gccross; search
+	    for compilers.</para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+    <para>The variables <quote>$(CPU)</quote> and <quote>$(OS)</quote> mentioned above
+      sometimes are derived from the current target architecture <quote>$(ARCH)</quote>.
+      If that one doesn't contain a dash ('-'), it's assumed to be <quote>$(CPU)</quote> and
+      <quote>$(OS)</quote> to be <quote>linux</quote>. However, if the architecture string
+      starts with <quote>hurd-</quote> or end in <quote>-gnu</quote>, the <quote>$(OS)</quote> part
+      will be <quote>gnu</quote>, the <quote>$(CPU)</quote> the rest before or after the OS.</para>
+    <para>Second part of the file is started by a line that ends with a colon.
+      In this part additional variables may be defined for &dpkg-buildpackage; wrapper.
+      This feature is meant for your convenience: Packages can refer to
+      unusual Makefile variables for the tools to use, and with a
+      package-specific section you can tell &dpkg-buildpackage; about those
+      variables, so that you don't need to set them manually each time.</para>
+    <para>Variables may be defined in two <emphasis>scopes</emphasis> -
+      <emphasis>makeflags</emphasis> and <emphasis>environment</emphasis>.
+      Variables defined in <emphasis>makeflags</emphasis> scope are put into
+      <quote>MAKEFLAGS</quote> environment variable. Variables defined in
+      <emphasis>environment</emphasis> scope become separate environment variables.</para>
+    <para>Default scope is <emphasis>makeflags</emphasis>. Scope is changed
+      to <emphasis>environment</emphasis> after
+      <blockquote><para>mode environment:
+        </para></blockquote>
+      line, and restored to <emphasis>makeflags</emphasis> after
+      <blockquote><para>mode makeflags:
+        </para></blockquote>
+      line. Note colons at the end of those lines.</para>
+    <para>Variables may be defined both globally and on per-package basis.
+      This is controled by
+      <blockquote><para>package NAME:
+        </para></blockquote>
+      lines. If NAME is <quote>all</quote>, subsequent definitions will be
+      global, otherwise - local for package NAME.</para>
+    <note>
+      <title>Backward compatiblity</title>
+      <para>For compatability with older format of <filename>cross-compile</filename> file,
+      <quote>package</quote> keyword may be ommited. Also note colon at the end of the line.</para>
+    </note>
+    <para>It is possible to define several sets of variables for different use cases.
+      For example, one set may be used for emdebian-style package builds, another
+      for normal package cross-compiling. This is implemented using
+      <emphasis>mode</emphasis> concept.</para>
+    <para>Any definitions after a
+      <blockquote><para>mode NAME:
+        </para></blockquote>
+      line are valid only for mode NAME. To choose mode, use <option>-M</option> switch of
+      &dpkg-buildpackage; wrapper. Only variables defined for the chosen mode will be
+      set, others will be ignored. If no <option>-M</option> switch is given, mode
+      <emphasis>default</emphasis> is assumed.</para>
+    <para>There is a special mode named <quote>all</quote>. Variables defined for this mode are
+      set always, in addition to mode-specific settings. This is the mode for the
+      variables defined before the first <emphasis>mode NAME:</emphasis> line.</para>
+  </refsect1>
+  <refsect1>
+    <title>VARIABLE UNSETTING</title>
+    <para>Second part of configuration file may be used not only to set variables,
+      but also to unset previously set variables. Syntax to unset variable is
+      <blockquote><para>unset varname</para></blockquote></para>
+    <para>Current <emphasis>package</emphasis>, <emphasis>mode</emphasis> and
+      <emphasis>scope</emphasis> affect variable unsetting in the same way as they
+      affect variable setting.</para>
+    <para>Variables set by default, such as CC or LD, also may be unset. This
+      may be useful if build scripts of some package get confused by environment
+      created by &dpkg-cross by default.</para>
+  </refsect1>
+  <refsect1>
+    <title>FILES</title>
+    <para><filename>$HOME/.dpkg-cross/cross-compile</filename>, <filename>/etc/dpkg-cross/cross-compile</filename></para>
+  </refsect1>
+  <refsect1>
+    <title>SEE ALSO</title>
+    <para>&seealso;</para>
+  </refsect1>
+  <refsect1>
+    <title>AUTHOR</title>
+    <para>&username; &useremail;</para>
+  </refsect1>
+  <refsect1>
+    <title>VERSION</title>
+    <para>&revision;</para>
+  </refsect1>
+  <refsect1>
+    <title>COPYRIGHT</title>
+    <para>Copyright &copy; &year; &username;
+
+      This program is free software; you can redistribute it and/or modify
+      it under the terms of the GNU General Public License as published by
+      the Free Software Foundation; either version 2 of the License, or
+      (at your option) any later version.</para>
+  </refsect1>
+</refentry>
+
+<!-- Keep this comment at the end of the file
+Local variables:
+mode: sgml
+sgml-omittag:t
+sgml-shorttag:t
+sgml-minimize-attributes:nil
+sgml-always-quote-attributes:t
+sgml-indent-step:2
+sgml-indent-data:t
+sgml-parent-document:nil
+sgml-default-dtd-file:nil
+sgml-exposed-tags:nil
+sgml-local-catalogs:nil
+sgml-local-ecat-files:nil
+End:
+-->

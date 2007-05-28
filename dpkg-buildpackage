@@ -1,0 +1,355 @@
+#!/usr/bin/perl
+#
+#  dpkg-buildpackage - Extended sematics of -a option
+#  Copyright (C) 1997-2000  Roman Hodek <roman@hodek.net>
+#  Copyright (C) 2000-2002  Colin Watson <cjwatson@debian.org>
+#  Copyright (C) 2002-2004  David Schleef <ds@schleef.org>
+#  Copyright (C) 2004  Nikita Youshchenko <yoush@cs.msu.su>
+#  Copyright (C) 2004  Raphael Bossek <bossekr@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#  $Id: dpkg-buildpackage,v 1.17 2006/07/24 13:10:42 yoush Exp $
+
+require "dpkg-cross.pl";
+
+$signcommand = (-e "$ENV{'HOME'}/.gnupg/secring.gpg") ? "gpg" : "pgp";
+
+# Scan arguments for the ones we're interested in.
+$do_setup = 0;
+foreach $arg ( @ARGV ) {
+	usage() if $arg =~ /^-h/;
+	if ($arg =~ /^-a/) {
+		$arch = $';
+		$do_setup = 1;
+	}
+	elsif ($arg =~ /^-nw/) {
+		$nogccross = 1;
+	}
+	elsif ($arg =~ /^-p/) {
+		$signcommand = $';
+	}
+	elsif ($arg =~ /^-k/) {
+		$signkey = $';
+	}
+	elsif ($arg =~ /^-m/) {
+		$opt_maintainer = $';
+	}
+	elsif ($arg =~ /^-sgpg/) {
+		$signinterface = "gpg";
+	}
+	elsif ($arg =~ /^-spgp/) {
+		$signinterface = "pgp";
+	}
+	elsif ($arg =~ /^-[bB]/) {
+		$binaryonly = 1;
+	}
+	elsif ($arg =~ /^-uc/) {
+		$dontsign = 1;
+	}
+	elsif ($arg =~ /^-M/) {
+		$mode = $';
+	}
+}
+@res_argv = grep { !(/^-M/) } @ARGV;
+$signinterface ||= $signcommand;
+
+# determine package name
+get_package_data()
+	|| die "$progname: cannot determine name of current package\n";
+
+@ADD_ARGS = ();
+
+if ($do_setup) {
+	$mode ||= "default";
+	setup_cross_env();
+
+	# If a maintainer name is configured, then add a -m option.
+	if (!$opt_maintainer && $maintainer && $maintainer ne "CURRENTUSER") {
+		push (@ADD_ARGS, "-m$maintainer");
+	}
+}
+else {
+	chop ($arch = `dpkg --print-architecture`);
+}
+
+# Set up gccross usage. Create a temporary directory, put symlinks for gccross there,
+# and prepent it to PATH
+if ($do_setup && !$nogccross) { 
+	$gccrossdir = create_tmpdir('gccross');
+	die "$progname: failed to create temporary directory: $!\n" unless $gccrossdir;
+	for $d_ (split(/:+/, $ENV{'PATH'})) {
+		if (opendir(D, $d_)) {
+			for $f_ (readdir(D)) {
+				next unless ($f_ =~ /^($crossprefix(gcc|g\+\+|cpp|cc|c\+\+|CC)(-[.0-9]+)?)$/);
+				next if -l "$gccrossdir/$f_";
+				next unless -f "$d_/$f_";
+				symlink("/usr/share/dpkg-cross/gccross", "$gccrossdir/$f_");
+			}
+			closedir(D);
+		}
+	}
+	$ENV{'PATH'} = "$gccrossdir:" . $ENV{'PATH'};
+}
+
+# To avoid duplicate signing of .changes file (in dpkg-buildpackage.orig
+# and after merging, always pass -uc flag to dpkg-buildpackage.orig,
+# and sign explicitly after merging.
+@res_argv = ((grep {$_ ne "-uc"} @res_argv), "-uc");
+
+# ...and call the real dpkg-buildpackage
+# it's just a bit trick to reset $0 for it, so it doesn't call itself
+# "dpkg-buildpackage.orig" :-) Supplying a different $0 on exec
+# doesn't work, beacuse it's a shell script, and the shell sets $0 to
+# the name of the file it interprets. So we have to use the feature
+# that after -c STRING, you can set all arguments, even $0
+my $rv = system "/bin/sh", "-c", ". /usr/bin/dpkg-buildpackage.orig",
+				"dpkg-buildpackage", @res_argv, @ADD_ARGS;
+
+# Remove temporary gccross directory.
+if ($do_setup) {
+	system("rm -rf $gccrossdir");
+}
+
+$changesfile = "../" . $package . '_' . $version . '_' . $arch . '.changes';
+
+if ($rv == 0) {
+	# merge the new .changes file with a maybe already existing one
+	$mergeresult = merge_changes();
+	$changesfile = $mergeresult if ($mergeresult);
+}
+else {
+	$rv = (($rv & 0xff) == 0) ? ($rv >> 8) : 128+($rv & 0x7f);
+}
+
+# Now sign changes file
+if (($rv == 0) && (!$dontsign)) {
+	print " signfile $changesfile\n";
+	my $usekey = $signkey || $opt_maintainer;
+	$usekey = $maintainer if $do_setup && $maintainer && $maintainer ne "CURRENTUSER";
+	if ($signinterface eq "gpg") {
+		system "cat \"$changesfile\" | $signcommand ".
+			   ($usekey ? "--local-user \"$usekey\" " : "").
+			   "--clearsign --armor --textmode >\"$changesfile.asc\"";
+	}
+	else {
+		system "$signcommand ".
+			   ($usekey ? "-u \"$usekey\" " : "").
+			   "+clearsig=on -fast <\"$changesfile\" >\"$changesfile.asc\"";
+	}
+	rename( "$changesfile.asc", "$changesfile" )
+		|| warn "$progname: Cannot rename $changesfile.asc: $!\n";
+}
+
+exit $rv;
+
+
+sub usage {
+	# print original message
+	system "dpkg-buildpackage.orig -h";
+	# and our comments...
+	print STDERR <<'EOF';
+
+dpkg-cross cross-compiling extension, version $DPKGCROSSVERSION.
+Use of -a option sets several environment variables for cross
+compiling.
+By default, compiler wrapper (gccross) will be used. To disable it,
+use -nw option.
+EOF
+	exit 0;
+}
+
+sub get_package_data {
+	
+	open( PIPE, "dpkg-parsechangelog |" );
+	while( <PIPE> ) {
+		chomp($package = $') if /^Source:\s*/;
+		chomp($version = $') if /^Version:\s*/;
+	}
+	close( PIPE );
+
+	# strip epoch if present
+	$version =~ s/^\d+://;
+	return( $package && $version );
+}
+
+
+sub merge_changes {
+	my( $changes_base, $this_changes, $other_changes, $new_changes, $i );
+	my( @changes_files, @this_farchs, @other_farchs, @this_archs,
+	    @other_archs, @this_files, @other_files, @this_bins, @other_bins,
+	    @this_desc, @other_desc, @new_farchs, @new_archs, @new_files );
+	
+	$changes_base = "../$package" . "_$version";
+	@changes_files = <${changes_base}_*.changes>;
+	return undef if @changes_files < 2;
+	warn "$progname: More than two .changes files; merge manually\n", return undef
+		if @changes_files > 2;
+
+	$this_changes = "$changes_base" . "_$arch.changes";
+	$other_changes = (grep( $_ ne $this_changes, @changes_files ))[0];
+
+	$this_changes =~ /_([^_]*)\.changes/;
+	@this_farchs = split( /\+/, $1 );
+	$other_changes =~ /_([^_]*)\.changes/;
+	@other_farchs = split( /\+/, $1 );
+
+	parse_changes( $this_changes, \@this_archs, \@this_files,
+				\@this_bins, \@this_desc );
+	parse_changes( $other_changes, \@other_archs, \@other_files,
+				\@other_bins, \@other_desc );
+
+	# new_farchs is union of other_farchs and this_farchs
+	@new_farchs = @other_farchs;
+	foreach $i ( @this_farchs ) {
+		push( @new_farchs, $i ) unless grep( $i eq $_, @new_farchs );
+	}
+	# exclude 'source' from new_farchs (see #322926)
+	@new_farchs = grep {$_ ne "source"} @new_farchs;
+
+	# new_archs is union of other_archs and this_archs
+	@new_archs = @other_archs;
+	foreach $i ( @this_archs ) {
+		push( @new_archs, $i ) unless grep( $i eq $_, @new_archs );
+	}
+
+	# new_bins is union of other_bins and this_bins
+	@new_bins = @other_bins;
+	foreach $i ( @this_bins ) {
+		push( @new_bins, $i ) unless grep( $i eq $_, @new_bins );
+	}
+
+	# new_files is union of other_files and this_files; if entries are in
+	# both, the one from this_files is more recent and has precedence
+	foreach $i ( @other_files ) {
+		push( @new_files, $i ) unless
+			grep( cfname($i) eq cfname($_), @this_files );
+	}
+	@new_files = ( @new_files, @this_files );
+
+	# same for new_desc
+	foreach $i ( @other_desc ) {
+		push( @new_desc, $i ) unless
+			grep( dpname($i) eq dpname($_), @this_desc );
+	}
+	@new_desc = ( @new_desc, @this_desc );
+
+	$new_changes = $changes_base . "_" . join( '+', @new_farchs ) . ".changes";
+	
+	open( F, "<$this_changes" )
+		|| die "$progname: Cannot open $this_changes: $!\n";
+	open( O, ">$new_changes.new" )
+		|| die "$progname: Cannot create $new_changes: $!\n";
+	while( <F> ) {
+	  got_line:
+		if (/^--+BEGIN PGP SIGNED MESSAGE/) {
+			$_ = <F>; # drop another line
+			next;
+		}
+		elsif (/^--+BEGIN PGP SIGNATURE/ .. /^--+END PGP SIGNATURE/) {
+			# omit
+		}
+		elsif (/^architecture:/i) {
+			print O "Architecture: @new_archs\n";
+		}
+		elsif (/^binary:/i) {
+			print O "Binary: @new_bins\n";
+		}
+		elsif (/^files:/i) {
+			print O "Files: \n", join( "\n", @new_files ), "\n";
+			while( <F> ) { last unless /^ /; }
+			goto got_line;
+		}
+		elsif (/^description:/i) {
+			print O "Description: \n", join( "\n", @new_desc ), "\n";
+			while( <F> ) { last unless /^ /; }
+			goto got_line;
+		}
+		else {
+			print O $_;
+		}
+	}
+	close( F );
+	close( O );
+
+	unlink( @changes_files );
+	rename( "$new_changes.new", $new_changes )
+		|| warn "$progname: Cannot rename $new_changes.new: $!\n";
+	
+	print "Merged changes with $other_changes\n";
+	return $new_changes;
+}
+
+
+sub parse_changes {
+	my( $file,  $arch_ref, $files_ref, $bin_ref, $desc_ref ) = @_;
+	my( @files, @desc );
+	my( $archs, $bins, $in_files, $in_desc ) = ( "", "", 0, 0 );
+	
+	open( F, "<$file" ) || die "$progname: Cannot open $file: $!\n";
+	while( <F> ) {
+		if ($in_files) {
+			if (/^ /) {
+				chomp $_;
+				push( @files, $_ );
+			}
+			else {
+				$in_files = 0;
+			}
+		}
+		elsif ($in_desc) {
+			if (/^ /) {
+				chomp $_;
+				push( @desc, $_ );
+			}
+			else {
+				$in_desc = 0;
+			}
+		}
+		elsif (/^Files:/) {
+			$in_files = 1;
+		}
+		elsif (/^Description:/) {
+			$in_desc = 1;
+		}
+		elsif (/^Architecture:\s*(.+)\s*$/) {
+			$archs = $1;
+		}
+		elsif (/^Binary:\s*(.+)\s*$/) {
+			$bins = $1;
+		}
+	}
+	close( F );
+	$archs || die "$progname: $file has no architecture field!\n";
+
+	@$arch_ref = split( /\s+/, $archs );
+	@$files_ref = @files;
+	@$bin_ref = split( /\s+/, $bins );
+	@$desc_ref = @desc;
+}
+
+
+sub cfname {
+	my( $line ) = @_;
+
+	return( (split( /\s+/, $line ))[5] );
+}
+
+sub dpname {
+	my( $line ) = @_;
+	$line =~ /^\s*(\S+).*$/;
+	return $1;
+}
+

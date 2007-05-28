@@ -1,0 +1,55 @@
+#
+# hppa specific configure variables
+#
+# If you have additions to this file, please tell <roman@debian.org>
+# so they can be included in the package.
+#
+ac_cv_c_bigendian=yes
+ac_cv_c_char_unsigned=no
+ac_cv_sizeof_long_long=8
+ac_cv_sizeof_unsigned_long_long=8
+ac_cv_sizeof_long=4
+ac_cv_sizeof_unsigned_long=4
+ac_cv_sizeof_int=4
+ac_cv_sizeof_unsigned_int=4
+ac_cv_sizeof_short=2
+ac_cv_sizeof_unsigned_short=2
+ac_cv_sizeof_short=2
+ac_cv_sizeof_unsigned_short=2
+ac_cv_sizeof_float=4
+ac_cv_sizeof_double=8
+ac_cv_sizeof_long_double=12
+
+
+## bash
+# no readline for now since no shlibs
+opt_readline=no
+opt_curses=no
+opt_static_link=yes
+#
+#opt_gnu_malloc=no
+#opt_glibc_malloc=yes
+with_glibc_malloc=yes
+with_gnu_malloc=no
+#
+#opt_extended_glob=no
+
+
+## grep
+# doesn't help yet because configure assumes set to yes
+# file a bug on this
+ac_use_included_regex=no
+
+## login
+ac_cv_func_setpgrp_void=yes
+
+## tar
+ac_cv_func_working_mktime=yes
+ac_cv_linux_vers=2.6.12
+jm_cv_func_working_re_compile_pattern=yes
+ac_use_included_regex=no
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_have_abstract_sockets=yes
+ac_cv_func_posix_getpwnam_r=yes
+glib_cv_monotonic_clock=yes
+sudo_cv_uid_t_len=10

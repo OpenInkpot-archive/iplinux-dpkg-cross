@@ -1,0 +1,24 @@
+Source: dpkg-cross
+Section: utils
+Priority: extra
+Maintainer: Debian Embedded Group <debian-embedded@lists.debian.org>
+Uploaders:
+ Wartan Hachaturow <wart@debian.org>,
+ Alexander Shishkin <virtuoso@slind.org>,
+ Nikita V. Youshchenko <yoush@debian.org>,
+ Raphael Bossek <bossekr@debian.org>,
+ NIIBE Yutaka <gniibe@fsij.org>
+Build-Depends-Indep: debhelper (>> 5), docbook-to-man
+Build-Depends: debhelper (>> 5)
+Standards-Version: 3.7.2
+
+Package: dpkg-cross
+Architecture: all
+Depends: dpkg-dev (>= 1.13.9), binutils, file
+Suggests: binutils-multiarch, fakeroot
+Conflicts: pkg-config (<< 0.15.0)
+Description: tools for cross compiling Debian packages
+ dpkg-cross itself is a tool for installing libraries and headers for
+ cross compiling in a way similar to dpkg. Furthermore, the
+ functionality of dpkg-buildpackage and dpkg-shlibdeps is enhanced to
+ support cross compiling.

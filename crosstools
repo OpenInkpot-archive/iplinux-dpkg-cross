@@ -1,0 +1,13 @@
+# This configuration file is used by dpkg-cross wrappers to choose
+# binutils to use with different targets.
+# Currently, this is used to choose 'strip' and 'objdump'.
+# If no information is given here, an attempt will be made to autodetect
+# proper tool, and /usr/bin/<tool> will be used if nothing better is found.
+
+# This file may be in /etc/dpkg-cross/crosstools or ~/.dpkg-cross/crosstools
+
+# <arch> <tool> <mode> <pathname>
+#arm strip default /usr/bin/arm-linux-strip
+#arm objdump default /usr/bin/arm-linux-objdump
+#arm strip HardHat /usr/local/hardhat/bin/arm-linux-strip
+

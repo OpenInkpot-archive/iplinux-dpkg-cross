@@ -1,0 +1,88 @@
+#
+# /etc/dpkg-cross/cross-compile: configuration for dpkg-cross & Co.
+#
+
+# default architecture for dpkg-cross (to avoid always typing the -a option
+# if you do cross installations only for one architecture)
+#default_arch = m68k
+
+#
+# general section: paths of cross compiling environment
+#
+# you can set the following variables here:
+#  crossprefix: prefix for cross compiling binaries; default: $(ARCH)-linux-
+#  crossbase  : base prefix for the following; default: /usr
+#  crossdir   : base directory for architecture; default:
+#               $(CROSSBASE)/$(DEB_HOST_GNU_TYPE)
+#  crossbin   : dir for binaries; default: $(CROSSDIR)/bin
+#  crosslib   : dir for libraries; default: $(CROSSDIR)/lib
+#  crossinc   : dir for headers; default: $(CROSSDIR)/include
+#  maintainer : maintainer name to pass to original dpkg-buildpackage
+#               in -m option. If not set at all, don't pass a -m, thus
+#               dpkg-buildpackage will use the name from the changelog
+#               file. If set to the special string CURRENTUSER,
+#               dpkg-buildpackage will use the name from the
+#               changelog, too, but signing the .changes will be done
+#               as the current user (default key).
+#  removedeps : comma-separated list of package names that should be removed
+#               from depends/conflicts/etc fields
+#  keepdeps   : comma-separated list of package names thet should be kept
+#               in depends/conflicts/etc fields as is, without adding
+#               -arch-cross.
+#
+# Usually, you need only set crossbase, or maybe also crossdir
+#
+crossbase = /usr
+
+# A crossroot definition is for the complete-Debian-system-mounted-somewhere  
+# approach, mainly used for Hurd.
+#crossroot-hurd-i386 = /gnu
+
+#
+# This setting for maintainer is usually right:
+#
+maintainer = CURRENTUSER
+
+#
+# This list is far from being complete ...
+# Please send additions to Nikita Youshchenko <yoush@cs.msu.su>
+#
+removedeps = gcc, binutils, gpm, cpp, debianutils, xfree86-common, libpam-runtime, xlibs-data, debconf
+keepdeps = gcc-3.3-base, gcc-3.4-base, gcc-4.0-base
+
+#
+# per-package sections: additional environment variables to set
+#
+# Please send additions to Nikita Youshchenko <yoush@cs.msu.su>
+
+package openssl:
+	unset AR
+
+package lsof:
+	unset AR
+	unset RANLIB
+
+package e2fsprogs:
+	unset LD
+
+# by Jorik Jonker <jorik@dnd.utwente.nl>
+package glibc:
+scope makeflags:
+	LINUX_SOURCE = $(CROSSDIR)
+			
+# package gs-aladdin:
+# # must be a native gcc
+# 	CCAUX = gcc
+#
+# -------------------------------
+# This should fit EmDebian needs:
+#
+# mode emdebian:
+# package all:
+#	scope environment:
+#		emdebian = true
+#	scope makeflags:
+#		CROSSPREFIX = $(crossprefix)
+#		EXTRA_CFLAGS = ...
+#		LIBC = ...
+#		CONFIG = ...

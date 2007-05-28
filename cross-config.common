@@ -1,0 +1,31 @@
+#
+# script called by all cross-config.$os files: load cross-config.arch and
+# set $host
+#
+
+#
+# include architecture-specific variables
+#
+ac_arch_site_file="`dirname $ac_site_file`/cross-config.$ARCH"
+if test -r "$ac_arch_site_file"; then
+    echo "loading arch site script $ac_arch_site_file"
+	. $ac_arch_site_file
+fi
+
+#
+# set $host so that config.guess isn't needed (it fails if $CC is a cross
+# compiler)
+#
+case $ARCH in
+	i?86) host=$ARCH-pc-unknown-linux-gnu ;;
+	*)    host=$ARCH-unknown-linux-gnu ;;
+esac
+echo host = $host
+ac_cv_linux_vers=2.6.12
+jm_cv_func_working_re_compile_pattern=yes
+ac_use_included_regex=no
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_have_abstract_sockets=yes
+ac_cv_func_posix_getpwnam_r=yes
+glib_cv_monotonic_clock=yes
+sudo_cv_uid_t_len=10

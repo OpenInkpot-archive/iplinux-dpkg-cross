@@ -1,0 +1,2 @@
+dpkg-cross: binary-without-manpage dpkg-buildpackage
+dpkg-cross: binary-without-manpage dpkg-shlibdeps
