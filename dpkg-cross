@@ -698,6 +698,9 @@ sub sub_build {
 	}
 	if (defined($control{"source"})) {
 		print CONTROL "Source: " . $control{"source"} . "\n";
+	} else {
+		# we transform the name of the package, so we can't skip this
+		print CONTROL "Source: " . $control{"package"} . "\n";
 	}
 	
 	# Turn Pre-Depends into Depends
