@@ -553,7 +553,7 @@ sub setup_cross_env {
 	
 	# Set additional environment variabled specified in "mode environment:".
 	foreach $var_ (keys %{ $pkgvars{'environment'} }) {
-		if (ref $pkgvars{'environmrnt'}{$var_}) {
+		if (ref $pkgvars{'environment'}{$var_}) {
 			delete $ENV{$var_};
 		} else {
 			$ENV{$var_} = $pkgvars{'environment'}{$var_};
