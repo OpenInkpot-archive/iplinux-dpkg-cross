@@ -1,3 +1,11 @@
+dpkg-cross (2:1.34.1) unstable; urgency=low
+
+  * Add missing cross_compiling=yes to i386 site config (thanks to Oleg
+    Romashin <romaxa@slind.org>).
+  * Add ac_cv_va_val_copy=no for powerpcs (same credit).
+
+ -- Alexander Shishkin <virtuoso@slind.org>  Fri, 28 Dec 2007 12:39:21 +0300
+
 dpkg-cross (2:1.34) unstable; urgency=low
 
   * Added dpkg-checkbuilddeps wrapper by Wartan Hachaturow <wart@debian.org>

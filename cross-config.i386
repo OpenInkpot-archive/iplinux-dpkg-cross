@@ -4,6 +4,7 @@
 # If you have additions to this file, please tell <roman@debian.org>
 # so they can be included in the package.
 #
+cross_compiling=yes
 ac_cv_c_bigendian=no
 ac_cv_c_char_unsigned=no
 ac_cv_sizeof_long_long=8
