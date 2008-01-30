@@ -26,8 +26,15 @@ ac_use_included_regex=no
 ac_cv_func_malloc_0_nonnull=yes
 ac_cv_have_abstract_sockets=yes
 ac_cv_func_posix_getpwnam_r=yes
-glib_cv_monotonic_clock=yes
 sudo_cv_uid_t_len=10
 libc_cv_linux2010='2.0.10 or later'
 libc_cv_forced_unwind=yes
 libc_cv_c_cleanup=yes
+#
+# for glib
+glib_cv_stack_grows=no
+glib_cv_uscore=no
+ac_cv_func_posix_getpwuid_r=yes		# ?
+glib_cv_use_pid_surrogate=no		# ?
+glib_cv_monotonic_clock=yes
+
