@@ -634,8 +634,6 @@ sub convert_path ($) {
 		$path = "$crosslib/$'";
 	} elsif ($path =~ /^(\/usr(\/X11R6)?)?\/lib64\//) {
 		$path = "$crosslib64/$'";
-	} else {
-		$path =~ s/^\/usr/$crossdir/;
 	}
 	return $path
 }
