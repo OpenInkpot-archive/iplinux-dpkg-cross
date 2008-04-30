@@ -1,3 +1,19 @@
 libc_cv_arm_tls=yes
 libc_cv_forced_unwind=yes
 libc_cv_c_cleanup=yes
+
+# glib & glib-based
+glib_cv_stack_grows=no
+glib_cv_uscore=no
+
+# devmapper & other
+ac_cv_func_malloc_0_nonnull=yes
+
+# shadow
+ac_cv_func_setpgrp=yes
+ac_cv_func_setpgrp_void=yes
+
+# dbus
+ac_cv_have_abstract_sockets=yes
+ac_cv_func_posix_getpwuid_r=yes
+ac_cv_func_posix_getpwnam_r=yes
