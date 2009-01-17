@@ -563,6 +563,9 @@ sub sub_build {
 			# regular .a or .o file under /emul/ia32-linux/
 			# for #463588
 			link_file("$src$_", "$dst$crosslib32/$1") or goto fail;
+		} elsif (m:^(/usr/lib/gcc/(.*)/[^/]+\.a)$:) {
+			# .a under /usr/lib/gcc (libstdc++6-dev)
+			link_file("$src$_", "$dst$_");
 		} elsif (m:^/usr/lib/([\w\-/]+)/lib/([^/]+\.so[^/]*)$:) {
 			# regular .so* file under /usr/lib/.*/lib/
 			# e.g. /usr/lib/libcairo-directfb/lib/libcairo.so.2.17.5

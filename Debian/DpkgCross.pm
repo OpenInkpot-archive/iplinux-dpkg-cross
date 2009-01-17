@@ -504,6 +504,8 @@ sub convert_path {
 	my $path = &simplify_path ($_[0]);
 	if ($path =~ /^\/usr(\/X11R6)?\/include\//) {
 		$path = "$crossinc/$'";
+	} elsif ($path =~ /^\/usr\/lib\/gcc/) {
+		# leave alone
 	} elsif ($path =~ /^(\/usr(\/X11R6)?)?\/lib\//) {
 		$path = "$crosslib/$'";
 	} elsif ($path =~ /^(\/usr(\/X11R6)?)?\/lib64\//) {
