@@ -1,0 +1,11 @@
+Template: dpkg-cross/default-arch
+Type: select
+# Translators: "None" here refers to "architecture"
+#flag:translate:1
+__Choices: None, alpha, amd64, arm, armeb, armel, hppa, i386, ia64, m68k, mips, mipsel, powerpc, s390, sparc
+Default: None
+_Description: Default cross-building architecture:
+ If this machine is typically cross-building for one main architecture,
+ you can select that architecture here to save specifying it again when
+ running dpkg-cross, apt-cross or emdebian-tools. Select 'None' to have
+ no default.

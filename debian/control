@@ -1,0 +1,43 @@
+Source: dpkg-cross
+Section: utils
+Priority: extra
+Maintainer: Debian Embedded Group <debian-embedded@lists.debian.org>
+Uploaders:
+ Wartan Hachaturow <wart@debian.org>,
+ Alexander Shishkin <virtuoso@slind.org>,
+ Nikita V. Youshchenko <yoush@debian.org>,
+ Raphael Bossek <bossekr@debian.org>,
+ NIIBE Yutaka <gniibe@fsij.org>,
+ Neil Williams <codehelp@debian.org>
+Build-Depends: cdbs, debhelper (>> 5), po-debconf
+Build-Depends-Indep: docbook-to-man
+Standards-Version: 3.8.0
+Homepage: http://dpkg-cross.alioth.debian.org/
+Vcs-Browser: http://alioth.debian.org/plugins/scmcvs/cvsweb.php/?cvsroot=dpkg-cross
+Vcs-CVS: :pserver:anonymous@cvs.alioth.debian.org:/cvsroot/dpkg-cross dpkg-cross
+
+Package: dpkg-cross
+Section: utils
+Priority: extra
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, dpkg-dev (>= 1.14.7), binutils-multiarch,
+ libdebian-dpkgcross-perl (= ${source:Version})
+Recommends: fakeroot
+Conflicts: apt-cross (<< 0.2.9), emdebian-tools (<< 0.3.9)
+Enhances: dpkg-dev
+Description: tools for cross compiling Debian packages
+ dpkg-cross is a tool for installing libraries and headers for
+ cross compiling in a way similar to dpkg. Supports enhanced
+ functionality of 'dpkg-buildpackage -a' when cross compiling.
+
+Package: libdebian-dpkgcross-perl
+Section: perl
+Priority: extra
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, file, dpkg-dev (>> 1.14.6),
+ libfile-temp-perl, libconfig-auto-perl, libfile-homedir-perl
+Description: functions to aid cross-compiling Debian packages
+ Debian::DpkgCross is a module of perl functions to aid installing
+ libraries and headers for cross compiling. Supports enhanced
+ functionality of 'dpkg-buildpackage -a' when cross compiling.
+

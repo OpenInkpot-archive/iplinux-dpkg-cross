@@ -1,0 +1,37 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: dpkg-cross\n"
+"Report-Msgid-Bugs-To: debian-embedded@lists.debian.org\n"
+"POT-Creation-Date: 2007-02-07 10:26+0000\n"
+"PO-Revision-Date: 2007-03-09 18:38+0100\n"
+"Last-Translator: Bart Cornelis <cobaco@skolelinux.no>\n"
+"Language-Team: debian-l10n-dutch <debian-l10n-dutch@lists.debian.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Poedit-Language: Dutch\n"
+
+#. Type: select
+#. Choices
+#. Translators: "None" here refers to "architecture"
+#: ../dpkg-cross.templates:1001
+msgid "None"
+msgstr "Geen"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid "Default cross-building architecture:"
+msgstr "Architectuur waarvoor standaard te cross-builden:"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid "If this machine is typically cross-building for one main architecture, you can select that architecture here to save specifying it again when running dpkg-cross, apt-cross or emdebian-tools. Select 'None' to have no default."
+msgstr "Als deze machine meestal gebruikt wordt om te 'cross-builden' naar één architectuur kunt u deze hier selecteren zodat u dit niet bij iedere aanroep van dpkg-cross, apt-cross en emdebian-tools dient te doen. Selecteer 'Geen' als u geen standaard-architectuur wilt instellen."
+

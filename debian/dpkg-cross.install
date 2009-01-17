@@ -1,0 +1,8 @@
+dpkg-cross ./usr/bin/
+config/cross-config.* ./etc/dpkg-cross/
+cross-compile.sample ./etc/dpkg-cross/
+gccross.1 ./usr/share/man/man1/
+dpkg-cross.1 ./usr/share/man/man1/
+cross-compile.5 ./usr/share/man/man5/
+gccross ./usr/share/dpkg-cross/bin/
+buildcross ./usr/share/dpkg-cross/

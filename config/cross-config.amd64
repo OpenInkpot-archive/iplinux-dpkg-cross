@@ -1,0 +1,20 @@
+#
+# amd64-specific configuration variables
+#
+# By "Alexandra N. Kossovsky" <Alexandra.Kossovsky@oktetlabs.ru>
+#
+ac_cv_c_bigendian=no
+ac_cv_c_char_unsigned=no
+ac_cv_sizeof_long_long=8
+ac_cv_sizeof_unsigned_long_long=8
+ac_cv_sizeof_long=8
+ac_cv_sizeof_unsigned_long=8
+ac_cv_sizeof_int=4
+ac_cv_sizeof_unsigned_int=4
+ac_cv_sizeof_short=2
+ac_cv_sizeof_unsigned_short=2
+ac_cv_sizeof_short=2
+ac_cv_sizeof_unsigned_short=2
+ac_cv_sizeof_float=4
+ac_cv_sizeof_double=8
+ac_cv_sizeof_long_double=16

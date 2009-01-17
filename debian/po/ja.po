@@ -1,0 +1,41 @@
+# Japanese debconf templates translation for dpkg-cross.
+# Copyright (C) 2007 Noritada Kobayashi
+# This file is distributed under the same license as the dpkg-cross package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: dpkg-cross (debconf) 1.35\n"
+"Report-Msgid-Bugs-To: debian-embedded@lists.debian.org\n"
+"POT-Creation-Date: 2007-02-07 10:26+0000\n"
+"PO-Revision-Date: 2007-03-01 16:27+0900\n"
+"Last-Translator: Noritada Kobayashi <nori1@dolphin.c.u-tokyo.ac.jp>\n"
+"Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: select
+#. Choices
+#. Translators: "None" here refers to "architecture"
+#: ../dpkg-cross.templates:1001
+msgid "None"
+msgstr "なし"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid "Default cross-building architecture:"
+msgstr "デフォルトのクロスビルドアーキテクチャ:"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid ""
+"If this machine is typically cross-building for one main architecture, you "
+"can select that architecture here to save specifying it again when running "
+"dpkg-cross, apt-cross or emdebian-tools. Select 'None' to have no default."
+msgstr ""
+"このマシンでクロスビルドするアーキテクチャが主に特定の 1 つに限られている場"
+"合、そのアーキテクチャをここで選択して、dpkg-cross や apt-cross、emdebian-"
+"tools を実行する際にあらためて指定せずに済むようにできます。デフォルトを与え"
+"ない場合は「なし」を選択してください。"

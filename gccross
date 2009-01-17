@@ -1,0 +1,125 @@
+#!/usr/bin/perl
+#
+#  gccross - Make GCC calls cross-compiler aware
+#  Copyright (C) 2004  Raphael Bossek <bossekr@debian.org>
+#  Copyright (C) 2004  Nikita Youshchenko <yoush@cs.msu.su>
+#  Copyright (c) 2007  Neil Williams <codehelp@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+
+use File::Basename;
+use Debian::DpkgCross;
+use Debian::DpkgCross qw(simplify_path);
+
+use vars qw( $config $crossinc $crossdir $crosslib $crosslib64 );
+
+if (basename($0) eq 'gccross') {
+	print STDERR "gccross should not be called directly, see the manual page for more information\n";
+	exit 1;
+}
+
+&read_config();
+&setup;
+$config = &get_config;
+$crossinc = $$config{'crossinc'};
+$crossdir = $$config{'crossdir'};
+$crosslib = $$config{'crosslib'};
+$crosslib64 = $$config{'crosslib64'};
+
+# only the most recent failed call to gccross is retained.
+open (DEBUG, ">/tmp/gccross2.log");
+use Data::Dumper;
+print DEBUG Dumper($config);
+
+# Check for recursive call. Convert ARGV only if call is not recursive
+@skip_ = split(":", $ENV{'GCCROSS_SKIP_PATH'});
+$recursive_ = (scalar(@skip_) > 0);
+if ($recursive_ || !&get_architecture()) {
+	@newARGV = @ARGV;
+} else {
+	for $arg_ (@ARGV) {
+		# Convert standalone full path arguments, or full paths after -I and -L
+		if ($arg_ =~ /^(-I|-L|)(\/.*)/) {
+			$o = $1;
+			$p = &simplify_path($2); # needed for comparison in next lines to work beter
+			# It is a better idea to convert path under /usr/lib/gcc-lib to
+			# appropriate path in cross-compiler setup. However, this is not
+			# trivial, because 'gcc version' part of path name may differ between
+			# native- and cross-compiler setup, and structure of gcc-lib directory
+			# may vary too.
+			# I wonder what for a makefile will reference gcc-lib directly ...
+			# Skip conversion of gcc-lib paths it for now.
+			if ($p =~ /^(^\/usr\/lib\/gcc(-lib)?\/|$crosslib|$crosslib64|$crossinc)/) {
+				push (@newARGV, $arg_);
+			} else {
+				print DEBUG "path-to-convert=$p\n";
+				push (@newARGV, $o . &convert_path($p));
+			}
+		}
+		else {
+			push (@newARGV, $arg_);
+		}
+	}
+}
+
+# Search for 'real' compiler.
+# Look in PATH, but skip directories already in $GCCROSS_SKIP_PATH.
+# Also, skip executable that looks like gccross itself
+D: for $dir_ (split(/:/, $ENV{'PATH'})) {
+	next if (!$dir_);
+	my $basename_ = basename($0);
+	$pathname_ = "$dir_/$basename_";
+	print DEBUG "checking pathname=$pathname_\n";
+	next if (! -x $pathname_);
+	next if (grep {$_ eq $dir_} @skip_);
+	print DEBUG "found $pathname_\n";
+	# $pathname_ exists, and was not tried yet
+	# first add $dir_ to $GCCROSS_SKIP_PATH, to avoid redudant checks
+	# for gccross
+	push (@skip_, $dir_);
+	# now check
+	if (open (C, $pathname_)) {
+		sysread (C, $data, 32);
+		close (C);
+		next D if ($data =~ /gccross/);
+	}
+	# At this point, $pathname_ is a valid candidate
+	# If call is not recursive and $GCCROSS_PREFIX is defined, call
+	# "$GCCROSS_PREFIX $pathname_ @newARGV". Otherwise call
+	# "$pathname_ @newARGV".
+	if (!($recursive_) && $ENV{'GCCROSS_PREFIX'}) {
+		@execlist_ = ($ENV{'GCCROSS_PREFIX'}, $pathname_, @newARGV);
+	} else {
+		@execlist_ = ($pathname_, @newARGV);
+	}
+	$ENV{'GCCROSS_SKIP_PATH'} = join(":", @skip_);
+	if (@ARGV != @newARGV) {
+		print "+ " . join(" ", @execlist_) . "\n";
+	}
+	print DEBUG "pathname=$pathname_\n";
+	print DEBUG `printenv | sort`;
+	$dbg = join(" ", @ARGV);
+	print DEBUG "old ARGV=$dbg\n";
+	close DEBUG;
+	exec @execlist_;
+	# This point is reached only if exec fails.
+	# Print a warning and try other pathnames in this case.
+	print STDERR "gccross: warning: failed to exec " . join(" ", @execlist_) . "\n";
+}
+
+# This point is reached if cross-compiler executable is not found in PATH
+print STDERR "gccross: failed to find valid $basename_ in PATH\n";
+exit 1;

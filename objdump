@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+#
+#  Objdump wrapper that autodetects correct objdump binaries for
+#  given arguments. Based on similar strip wrapper.
+#
+#  Copyright (C) 2005  Nikita Youshchenko <yoush@debian.org>
+#  Copyright (c) 2007  Neil Williams <codehelp@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+
+use Debian::DpkgCross;
+use Debian::DpkgCross qw(detect_arch get_tool);
+use strict;
+use warnings;
+
+#&read_config(); # to get $crossprefix ...  probably non needed?
+
+# Current dpkg-cross mode
+my $mode = $ENV{"DPKGCROSSMODE"} || "default";
+
+# Collect non-file arguments to pass to all objdump's
+my @nonfile_args;
+
+# Arguments for particular objdump's, keyed by objdump executable paths
+my %cmdlines;
+
+# Flag set to 1 if '--' argument is seen
+my $allfiles = 0;
+# Flag set to 1 if next argument is a parameter for the previous argument
+my $argparam = 0;
+
+for my $arg (@ARGV) {
+	if (!$allfiles && ($argparam || ($arg =~ /^-/))) {
+		if (!$argparam) {
+			$allfiles = 1 if ($arg eq "--");
+			$argparam = 1 if ($arg =~ /^-[bjmM]$/);
+		} else {
+			$argparam = 0;
+		}
+		push @nonfile_args, $arg;
+		push @{$cmdlines{$_}}, $arg for (keys %cmdlines);
+		next;
+	}
+
+	my $arch = &detect_arch($arg);
+	my $objdump = &get_tool($arch, "objdump", $mode);	# This will get /usr/bin/objdump for unknown arch
+
+	$cmdlines{$objdump} = [ @nonfile_args ] if (!defined($cmdlines{$objdump}));
+	push @{$cmdlines{$objdump}}, $arg;
+}
+
+# If no file arguments found, just call /usr/bin/objdump
+$cmdlines{"/usr/bin/objdump"} = [ @nonfile_args ] if (scalar(keys(%cmdlines)) == 0);
+
+# Now call all objdump's and return non-zero if any one returned non-zero
+my $retval = 0;
+for my $objdump (keys(%cmdlines)) {
+	print "+ $objdump " . join(" ", @{$cmdlines{$objdump}}) . "\n";
+	$retval = 1 if (system($objdump, @{$cmdlines{$objdump}}) != 0);
+}
+
+exit $retval;
+

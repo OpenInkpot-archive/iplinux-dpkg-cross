@@ -1,0 +1,80 @@
+#
+#  Enhances the dpkg-buildpackage -a support.
+#
+#  Copyright (C) 1997-2000  Roman Hodek <roman@hodek.net>
+#  Copyright (C) 2000-2002  Colin Watson <cjwatson@debian.org>
+#  Copyright (C) 2002-2004  David Schleef <ds@schleef.org>
+#  Copyright (C) 2004  Nikita Youshchenko <yoush@cs.msu.su>
+#  Copyright (C) 2004  Raphael Bossek <bossekr@debian.org>
+#  Copyright (c) 2007  Neil Williams <codehelp@debian.org>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+
+function mustsetvar () {
+	if [ "x$2" = x ]; then
+		echo >&2 "$progname: unable to determine $3" ; \
+		exit 1
+	else
+		echo "$progname: $3 $2" ; \
+		eval "$1=\"\$2\""
+	fi
+}
+
+function clean_gccross {
+	if [ -d $CROSSBIN ]; then
+		echo "$progname: removing temporary directory"
+		rm -rf $CROSSBIN
+	fi
+}
+
+function setup_cross {
+	ARCH=$targetarch
+	DPKGCROSSPATH="/usr/share/dpkg-cross/bin"
+	mustsetvar crossprefix "`dpkg-architecture -a$ARCH -qDEB_HOST_GNU_TYPE 2>/dev/null`" "building for"
+	export ARCH=$ARCH
+	mustsetvar CROSSBIN "`mktemp -d -t gccross.XXXXXXXXXX`" "temporary gccross directory"
+	PATH=$PATH
+	export PATH="$DPKGCROSSPATH:$PATH";
+	REGEXP='(gcc|cpp|c\+\+|g\+\+|cc|CC)(-[.0-9]+)?)'
+	IFS=:
+	for D in $PATH; do
+		if [ -d $D ]; then
+			[ -h $D ] && continue
+			# check for files in $D that match the exp and remove newline
+			for F in `ls $D | egrep "^($crossprefix-$REGEXP$" | tr -s '\n' ':'`; do
+				[ -h $D ] && continue
+				[ ! -x $D ] && continue
+				for G in "$F"; do
+					[ -h $G ] && continue
+					ln -s $DPKGCROSSPATH/gccross $CROSSBIN/$G
+				done
+			done
+		fi
+	done
+	export PATH="$CROSSBIN:$PATH";
+	# Set `dpkg-architecture' environment veriables.
+	for var in "DEB_HOST_ARCH" "DEB_HOST_ARCH_OS" "DEB_HOST_ARCH_CPU" \
+	   "DEB_HOST_GNU_CPU" "DEB_HOST_GNU_SYSTEM" "DEB_HOST_GNU_TYPE"
+	do
+		mustsetvar TMP "`dpkg-architecture -a$ARCH -q$var 2>/dev/null`" "dpkg-architecture value $var"
+		export $var=$TMP
+	done
+	export USRLIBDIR="/usr/$crossprefix/lib"
+	export PKG_CONFIG_LIBDIR="/usr/$crossprefix/lib/pkgconfig/"
+	export CONFIG_SITE="/etc/dpkg-cross/cross-config.$ARCH"
+	export PATH="$PATH:/usr/$crossprefix/bin/"
+	trap clean_gccross exit 0 sighup
+}

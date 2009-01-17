@@ -1,0 +1,43 @@
+# Italian (it) translation of debconf templates for dpkg-cross
+# Copyright (C) 2007 Free Software Foundation, Inc.
+# This file is distributed under the same license as the dpkg-cross package.
+# Luca Monducci <luca.mo@tiscali.it>, 2007.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: dpkg-cross 1.35 italian debconf templates\n"
+"Report-Msgid-Bugs-To: debian-embedded@lists.debian.org\n"
+"POT-Creation-Date: 2007-02-07 10:26+0000\n"
+"PO-Revision-Date: 2007-05-06 15:43+0200\n"
+"Last-Translator: Luca Monducci <luca.mo@tiscali.it>\n"
+"Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: select
+#. Choices
+#. Translators: "None" here refers to "architecture"
+#: ../dpkg-cross.templates:1001
+msgid "None"
+msgstr "Nessuna"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid "Default cross-building architecture:"
+msgstr "Architettura di cross-compilazione predefinita:"
+
+#. Type: select
+#. Description
+#: ../dpkg-cross.templates:1002
+msgid ""
+"If this machine is typically cross-building for one main architecture, you "
+"can select that architecture here to save specifying it again when running "
+"dpkg-cross, apt-cross or emdebian-tools. Select 'None' to have no default."
+msgstr ""
+"Se su questa macchina si effettua tipicamente la cross-compilazione su una "
+"architettura in particolare, è possibile selezionare adesso quella "
+"architettura in modo da non doverla poi specificare ogni volta che si usa "
+"dpkg-cross, apt-cross o emdebian-tools. Selezionare \"Nessuna\" se non vi "
+"vuole avere una architettura predefinita."
