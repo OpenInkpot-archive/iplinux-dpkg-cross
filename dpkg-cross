@@ -767,7 +767,7 @@ sub sub_build {
 
 	print CONTROL "Package: " . $control{"package"} . "-$arch-cross\n";
 	print CONTROL "Version: " . $control{"version"} . "\n";
-	print CONTROL "Section: devel\n";
+	print CONTROL "Section: host/cross\n";
 	print CONTROL "Priority: extra\n";
 	print CONTROL "Architecture: all\n";
 
