@@ -8,7 +8,7 @@ Standards-Version: 3.8.0
 Homepage: http://dpkg-cross.alioth.debian.org/
 
 Package: dpkg-cross
-Section: utils
+Section: host/tools
 Priority: extra
 Architecture: all
 Depends: ${perl:Depends}, ${misc:Depends}, dpkg-dev (>= 1.14.7), binutils-multiarch,
@@ -22,7 +22,7 @@ Description: tools for cross compiling Debian packages
  functionality of 'dpkg-buildpackage -a' when cross compiling.
 
 Package: libdebian-dpkgcross-perl
-Section: perl
+Section: host/tools
 Priority: extra
 Architecture: all
 Depends: ${perl:Depends}, ${misc:Depends}, file, dpkg-dev (>> 1.14.6),
