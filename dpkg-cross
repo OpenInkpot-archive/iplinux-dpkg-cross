@@ -775,6 +775,8 @@ sub sub_build {
 		print CONTROL "Maintainer: " . $control{"maintainer"} . "\n";
 	}
 	if (defined($control{"source"})) {
+		print CONTROL "Source: " . $control{"source"} . "\n";
+	} else {
 		print CONTROL "Source: " . $control{"package"} . "\n";
 	}
 
