@@ -1,3 +1,10 @@
+dpkg-cross (2.3.0.1.ip2) unstable; urgency=low
+
+  * Fixed source package for generated ones.
+  * B-D-I led to the broken package built with -B.
+
+ -- Mikhail Gusarov <dottedmag@dottedmag.net>  Thu, 05 Mar 2009 18:57:29 +0600
+
 dpkg-cross (2.3.0.1.ip1) asimov; urgency=low
 
   * First build for Inkpump:
