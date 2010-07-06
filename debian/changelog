@@ -1,3 +1,13 @@
+dpkg-cross (2.3.0.1.ip3) zelazny; urgency=low
+
+  [ Evan Kroske ]
+  * Implement handling .symbols files.
+  
+  [ Mikhail Gusarov ]
+  * Upload.
+
+ -- Mikhail Gusarov <dottedmag@dottedmag.net>  Wed, 07 Jul 2010 03:01:39 +0700
+
 dpkg-cross (2.3.0.1.ip2) asimov; urgency=low
 
   * Fixed source package for generated ones.
