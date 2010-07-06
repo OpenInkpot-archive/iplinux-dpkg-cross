@@ -757,6 +757,12 @@ sub sub_build {
 		print "Installing shlibs file\n" if $verbose >= 2;
 		link_file("$src/DEBIAN/shlibs", "$dst/DEBIAN/shlibs");
 	}
+	
+	# Link the symbols file 
+	if (-f "$src/DEBIAN/symbols") {
+		print "Installing symbols file\n" if $verbose >= 2;
+		link_file("$src/DEBIAN/symbols", "$dst/DEBIAN/symbols");
+	}
 
 	# Create the control file.
 	print "Creating control file\n" if $verbose >= 2;
